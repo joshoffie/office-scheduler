@@ -113,6 +113,7 @@ let selectedDate = new Date();
 let roomViewMode = 'day'; // 'day', 'week', 'month'
 let deletingBooking = null, bookingDate = null, nowTimer = null;
 let settingsFloorId = null; // which floor is selected in settings for adding rooms
+let editingBookingId = null; // tracks which booking is being edited in inline panel
 
 // ===== UTILITY =====
 function $(id) { return document.getElementById(id); }
@@ -178,6 +179,12 @@ const THEMES = {
       '--border':'#E2E8F0','--text-primary':'#1E293B','--text-secondary':'#64748B',
       '--gray-50':'#F8FAFC','--gray-100':'#F1F5F9','--gray-200':'#E2E8F0','--gray-300':'#CBD5E1',
       '--gray-400':'#94A3B8','--gray-500':'#64748B','--gray-600':'#475569','--gray-700':'#334155','--gray-800':'#1E293B',
+      '--blue-50':'#EFF6FF','--blue-100':'#DBEAFE','--blue-200':'#BFDBFE','--blue-300':'#93C5FD',
+      '--blue-400':'#60A5FA','--blue-500':'#3B82F6','--blue-600':'#2563EB','--blue-700':'#1D4ED8',
+      '--green-50':'#F0FDF4','--green-100':'#DCFCE7','--green-500':'#22C55E','--green-600':'#16A34A','--green-700':'#15803D',
+      '--red-50':'#FEF2F2','--red-100':'#FEE2E2','--red-200':'#FECACA','--red-500':'#EF4444','--red-600':'#DC2626','--red-700':'#B91C1C',
+      '--amber-100':'#FEF3C7','--amber-500':'#F59E0B',
+      '--purple-50':'#F5F3FF','--purple-100':'#EDE9FE','--purple-500':'#8B5CF6','--purple-700':'#6D28D9',
     }
   },
   warm: {
@@ -198,9 +205,11 @@ const THEMES = {
       '--border':'#334155','--text-primary':'#F1F5F9','--text-secondary':'#94A3B8',
       '--gray-50':'#152035','--gray-100':'#1E293B','--gray-200':'#334155','--gray-300':'#475569',
       '--gray-400':'#94A3B8','--gray-500':'#94A3B8','--gray-600':'#CBD5E1','--gray-700':'#E2E8F0','--gray-800':'#F1F5F9',
-      '--red-50':'#2A1215','--red-100':'#451A1E','--red-700':'#FCA5A5',
-      '--green-50':'#0F2A1E','--green-100':'#14532D',
-      '--blue-50':'#172554','--blue-100':'#1E3A5F',
+      '--red-50':'#2A1215','--red-100':'#451A1E','--red-500':'#F87171','--red-600':'#EF4444','--red-700':'#FCA5A5',
+      '--green-50':'#0F2A1E','--green-100':'#14532D','--green-500':'#4ADE80','--green-600':'#22C55E','--green-700':'#86EFAC',
+      '--blue-50':'#172554','--blue-100':'#1E3A5F','--blue-200':'#60A5FA','--blue-300':'#60A5FA','--blue-400':'#93C5FD','--blue-500':'#3B82F6','--blue-600':'#2563EB','--blue-700':'#1D4ED8',
+      '--purple-50':'#2E1065','--purple-100':'#3B0764','--purple-500':'#A78BFA','--purple-700':'#C4B5FD',
+      '--amber-100':'#3D2E08','--amber-500':'#FBBF24',
     }
   },
   ocean: {
@@ -211,7 +220,7 @@ const THEMES = {
       '--border':'#BAE6FD','--text-primary':'#164E63','--text-secondary':'#4B8CA0',
       '--gray-50':'#F5FBFF','--gray-100':'#F0F9FF','--gray-200':'#BAE6FD','--gray-300':'#7DD3FC',
       '--gray-400':'#4B8CA0','--gray-500':'#4B8CA0','--gray-600':'#0C4A6E','--gray-700':'#164E63','--gray-800':'#164E63',
-      '--blue-500':'#0891B2','--blue-600':'#0E7490','--blue-700':'#155E75',
+      '--blue-50':'#F0F9FF','--blue-100':'#E0F2FE','--blue-200':'#BAE6FD','--blue-300':'#7DD3FC','--blue-400':'#38BDF8','--blue-500':'#0891B2','--blue-600':'#0E7490','--blue-700':'#155E75',
     }
   },
   sage: {
@@ -222,7 +231,7 @@ const THEMES = {
       '--border':'#D1E3D1','--text-primary':'#1A3A1A','--text-secondary':'#5C7A5C',
       '--gray-50':'#F7FAF7','--gray-100':'#F2F7F2','--gray-200':'#D1E3D1','--gray-300':'#B0CCB0',
       '--gray-400':'#7A9C7A','--gray-500':'#5C7A5C','--gray-600':'#3D5C3D','--gray-700':'#2A422A','--gray-800':'#1A3A1A',
-      '--blue-500':'#16A34A','--blue-600':'#15803D','--blue-700':'#166534',
+      '--blue-50':'#F0FDF4','--blue-100':'#DCFCE7','--blue-200':'#BBF7D0','--blue-300':'#86EFAC','--blue-400':'#4ADE80','--blue-500':'#16A34A','--blue-600':'#15803D','--blue-700':'#166534',
     }
   },
 };
@@ -231,11 +240,15 @@ function applyTheme(themeId) {
   const theme = THEMES[themeId];
   if (!theme) return;
   const root = document.documentElement;
+  // Reset ALL vars to clinical defaults first
+  for (const [prop, val] of Object.entries(THEMES.clinical.vars)) {
+    root.style.setProperty(prop, val);
+  }
+  // Then apply the selected theme on top
   for (const [prop, val] of Object.entries(theme.vars)) {
     root.style.setProperty(prop, val);
   }
   localStorage.setItem('theme', themeId);
-  // Update active state in picker
   document.querySelectorAll('.theme-card').forEach(c => c.classList.toggle('active', c.dataset.theme === themeId));
 }
 
@@ -455,12 +468,6 @@ function setupDragCreate(evCol, scrollParent) {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
-
-  // Single click (no drag) also creates a quick-add at that time
-  evCol.addEventListener('click', e => {
-    if (e.target.closest('.event-block') || e.target.closest('.quick-add-block')) return;
-    // Only fire if not from a drag (drag already handled in mouseup)
-  });
 }
 
 function showQuickAdd(evCol, scrollParent, startMins, endMins) {
@@ -483,6 +490,13 @@ function showQuickAdd(evCol, scrollParent, startMins, endMins) {
 
   block.appendChild(timeLabel);
   block.appendChild(input);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.innerHTML = '&times;';
+  cancelBtn.style.cssText = 'position:absolute;top:2px;right:4px;border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--gray-400);padding:2px 6px;border-radius:4px;';
+  cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); block.remove(); });
+  block.appendChild(cancelBtn);
+
   evCol.appendChild(block);
   input.focus();
 
@@ -559,8 +573,14 @@ function renderDayView() {
     container.scrollTop=Math.max(0,nm-container.clientHeight/2);
   } else container.scrollTop=7*60;
 
-  // Click event blocks to delete (only if not dragged)
-  container.querySelectorAll('.event-block').forEach(el=>{el.addEventListener('click',e=>{e.stopPropagation();showDeleteModal(JSON.parse(el.dataset.booking));});});
+  // Click event blocks to edit (only if not dragged)
+  container.querySelectorAll('.event-block').forEach(el=>{
+    el.addEventListener('click',e=>{
+      e.stopPropagation();
+      const booking=JSON.parse(el.dataset.booking);
+      editBookingInPanel(booking);
+    });
+  });
 
   // Drag event blocks to reschedule
   setupEventDrag(container, '.event-block', container);
@@ -847,6 +867,41 @@ function setupInlineAutocomplete() {
 
 // ===== BOOKING MODAL =====
 // ===== INLINE BOOKING PANEL (day view) =====
+function editBookingInPanel(booking) {
+  bookingDate = booking.date;
+  $('inline-booking-title').value = booking.title || '';
+  $('inline-booking-details').value = booking.details || '';
+  if(inlineStartInput) inlineStartInput.setMins(timeToMinutes(booking.startTime));
+  if(inlineEndInput) inlineEndInput.setMins(timeToMinutes(booking.endTime));
+
+  // Set color
+  const color = booking.color || '#3B82F6';
+  $('inline-booking-color').value = color;
+  $('inline-color-picker')?.querySelectorAll('.color-swatch').forEach(s =>
+    s.classList.toggle('selected', s.dataset.color === color));
+
+  if(booking.isRecurring) {
+    // For recurring, show the recurring options
+    $('inline-booking-recurring').checked = true;
+    $('inline-recurring-btn').classList.add('active');
+    show('inline-recurring-options');
+    $('inline-recurring-doctor').value = booking.title || '';
+    // We can't fully edit recurring rules inline easily, so just show delete option
+    editingBookingId = null;
+    showDeleteModal(booking);
+    return;
+  }
+
+  editingBookingId = booking.id;
+  $('inline-booking-recurring').checked = false;
+  $('inline-recurring-btn').classList.remove('active');
+  hide('inline-recurring-options');
+
+  // Change button to "Update"
+  $('inline-save-btn').textContent = 'Update Booking';
+  $('inline-booking-title').focus();
+}
+
 function resetInlinePanel() {
   $('inline-booking-title').value='';
   $('inline-booking-details').value='';
@@ -861,6 +916,8 @@ function resetInlinePanel() {
   // Reset color to default blue
   $('inline-booking-color').value='#3B82F6';
   $('inline-color-picker')?.querySelectorAll('.color-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.color==='#3B82F6'));
+  editingBookingId = null;
+  $('inline-save-btn').textContent = 'Save Booking';
 }
 
 async function saveInlineBooking() {
@@ -881,7 +938,19 @@ async function saveInlineBooking() {
     data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
   } else {
     const color=$('inline-booking-color').value;
-    data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,color,createdAt:new Date().toISOString()});
+    if (editingBookingId) {
+      // Update existing booking
+      const existing = data.bookings.find(b => b.id === editingBookingId);
+      if (existing) {
+        existing.title = title;
+        existing.details = details;
+        existing.startTime = startTime;
+        existing.endTime = endTime;
+        existing.color = color;
+      }
+    } else {
+      data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,color,createdAt:new Date().toISOString()});
+    }
   }
   resetInlinePanel(); renderRoom(); toast('Booking saved');
   try{await store.save(data);}catch(e){toast('Error saving');console.error(e);}
@@ -915,7 +984,7 @@ async function saveBooking() {
   if(!data.knownNames.includes(title)) data.knownNames.push(title);
 
   if(isRecurring){
-    const doc=$('recurring-doctor').value.trim(), days=[...document.querySelectorAll('.day-btn.selected')].map(b=>Number(b.dataset.day));
+    const doc=$('recurring-doctor').value.trim(), days=[...$('day-picker').querySelectorAll('.day-btn.selected')].map(b=>Number(b.dataset.day));
     if(!doc){toast('Enter doctor name');return;} if(!days.length){toast('Select days');return;}
     if(!data.knownNames.includes(doc)) data.knownNames.push(doc);
     data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
@@ -990,9 +1059,18 @@ function startAutoSync(){
     if(!store)return;
     try{
       data=await store.load();
-      pruneOldData(data); // lightweight check, only saves if something was pruned
+      pruneOldData(data);
       if($('grid-view').style.display!=='none')renderGrid();
-      if($('room-view').style.display!=='none')renderRoom();
+      // Don't re-render room view if user is filling in the booking form
+      if($('room-view').style.display!=='none'){
+        const activeEl=document.activeElement;
+        const isEditing = activeEl && (
+          activeEl.closest('#day-split-panel') ||
+          activeEl.closest('#booking-modal') ||
+          activeEl.closest('.quick-add-block')
+        );
+        if(!isEditing) renderRoom();
+      }
     }catch(e){console.warn('Auto-sync failed:',e);}
   },30000);
 }
@@ -1092,7 +1170,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     else{hide('recurring-options');$('booking-title').placeholder='e.g., Dr. Smith';}
   });
   $('recurring-doctor').addEventListener('input',()=>{if($('booking-recurring').checked)$('booking-title').value=$('recurring-doctor').value;});
-  document.querySelectorAll('.day-btn').forEach(b=>{b.addEventListener('click',e=>{e.preventDefault();b.classList.toggle('selected');});});
+  $('day-picker').querySelectorAll('.day-btn').forEach(b=>{b.addEventListener('click',e=>{e.preventDefault();b.classList.toggle('selected');});});
 
   // Enter key saves booking unless details textarea is focused
   document.addEventListener('keydown',e=>{
