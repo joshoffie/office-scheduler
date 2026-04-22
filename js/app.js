@@ -1410,6 +1410,11 @@ function positionTooltip(targetEl, step) {
   // Remove previous arrow class
   tooltip.className = 'tour-tooltip arrow-' + (step.arrow || 'top');
 
+  const tooltipWidth = 360;
+  const tooltipHeight = 150; // estimate
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
   if (targetEl) {
     const rect = targetEl.getBoundingClientRect();
     const padding = 8;
@@ -1420,49 +1425,60 @@ function positionTooltip(targetEl, step) {
     spotlight.style.width = (rect.width + padding * 2) + 'px';
     spotlight.style.height = (rect.height + padding * 2) + 'px';
 
-    // Position tooltip near spotlight
-    const tooltipWidth = 360;
-    const tooltipHeight = 150; // estimate
-    const gap = 16;
+    // If target is very large (>70% of viewport in both dimensions),
+    // center the tooltip on screen instead of trying to place it beside the element
+    const isLargeTarget = rect.width > viewportWidth * 0.7 && rect.height > viewportHeight * 0.7;
 
-    let top, left, arrowDir;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // Try to place below first
-    if (rect.bottom + gap + tooltipHeight < viewportHeight) {
-      top = rect.bottom + gap;
-      arrowDir = 'top';
-    } else if (rect.top - gap - tooltipHeight > 0) {
-      top = rect.top - gap - tooltipHeight;
-      arrowDir = 'bottom';
+    if (isLargeTarget) {
+      tooltip.style.top = (viewportHeight / 2 - tooltipHeight / 2) + 'px';
+      tooltip.style.left = (viewportWidth / 2 - tooltipWidth / 2) + 'px';
+      tooltip.className = 'tour-tooltip arrow-bottom';
     } else {
-      top = Math.max(16, Math.min(viewportHeight - tooltipHeight - 16, rect.top - tooltipHeight / 2));
-      arrowDir = rect.left > viewportWidth / 2 ? 'right' : 'left';
-    }
+      const gap = 16;
+      let top, left, arrowDir;
 
-    // Try to center horizontally
-    if (arrowDir === 'top' || arrowDir === 'bottom') {
-      left = Math.max(16, Math.min(viewportWidth - tooltipWidth - 16, rect.left + rect.width / 2 - tooltipWidth / 2));
-    } else {
-      // Side placement
-      if (rect.right + gap + tooltipWidth < viewportWidth) {
-        left = rect.right + gap;
-        arrowDir = 'left';
+      // Try to place below first
+      if (rect.bottom + gap + tooltipHeight < viewportHeight) {
+        top = rect.bottom + gap;
+        arrowDir = 'top';
+      } else if (rect.top - gap - tooltipHeight > 0) {
+        top = rect.top - gap - tooltipHeight;
+        arrowDir = 'bottom';
       } else {
-        left = rect.left - gap - tooltipWidth;
-        arrowDir = 'right';
+        top = Math.max(16, Math.min(viewportHeight - tooltipHeight - 16, rect.top + rect.height / 2 - tooltipHeight / 2));
+        arrowDir = rect.left > viewportWidth / 2 ? 'right' : 'left';
       }
-    }
 
-    tooltip.className = 'tour-tooltip arrow-' + arrowDir;
-    tooltip.style.top = top + 'px';
-    tooltip.style.left = left + 'px';
+      // Position horizontally
+      if (arrowDir === 'top' || arrowDir === 'bottom') {
+        left = Math.max(16, Math.min(viewportWidth - tooltipWidth - 16, rect.left + rect.width / 2 - tooltipWidth / 2));
+      } else {
+        // Side placement
+        if (rect.right + gap + tooltipWidth < viewportWidth) {
+          left = rect.right + gap;
+          arrowDir = 'left';
+        } else if (rect.left - gap - tooltipWidth > 0) {
+          left = rect.left - gap - tooltipWidth;
+          arrowDir = 'right';
+        } else {
+          // Fallback: center horizontally
+          left = Math.max(16, viewportWidth / 2 - tooltipWidth / 2);
+          arrowDir = 'bottom';
+        }
+      }
+
+      // Final clamp to ensure tooltip stays on screen
+      top = Math.max(16, Math.min(viewportHeight - tooltipHeight - 16, top));
+      left = Math.max(16, Math.min(viewportWidth - tooltipWidth - 16, left));
+
+      tooltip.className = 'tour-tooltip arrow-' + arrowDir;
+      tooltip.style.top = top + 'px';
+      tooltip.style.left = left + 'px';
+    }
   } else {
     // Center tooltip on screen
-    const tooltipWidth = 360;
-    tooltip.style.top = (window.innerHeight / 2 - 100) + 'px';
-    tooltip.style.left = (window.innerWidth / 2 - tooltipWidth / 2) + 'px';
+    tooltip.style.top = (viewportHeight / 2 - 100) + 'px';
+    tooltip.style.left = (viewportWidth / 2 - tooltipWidth / 2) + 'px';
     tooltip.className = 'tour-tooltip arrow-bottom';
     spotlight.style.width = '0';
     spotlight.style.height = '0';
