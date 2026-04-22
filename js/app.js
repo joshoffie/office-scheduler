@@ -101,11 +101,16 @@ function renderGrid() {
   const grid=$('room-grid'), now=new Date(), nm=now.getHours()*60+now.getMinutes();
   const rooms=data.rooms.filter(r=>r.floorId===currentFloorId).sort((a,b)=>a.order-b.order);
   $('grid-date-display').textContent=formatDateFull(now);
+  // Now-line position shifted left a bit (show 2% earlier so you can see recently-ended blocks)
+  const nowPct = Math.max(0, (nm / 1440) * 100 - 1);
+
   grid.innerHTML=rooms.map(room=>{
     const occ=getCurrentOccupant(room.id), bks=getBookingsForRoomDate(room.id,now);
     let mini='';
     for(const b of bks){const s=timeToMinutes(b.startTime),e=timeToMinutes(b.endTime),l=(s/1440)*100,w=((e-s)/1440)*100;
       const cur=s<=nm&&e>nm,fut=s>nm; mini+=`<div class="mini-block${cur?' current':fut?' future':''}" style="left:${l}%;width:${w}%"></div>`;}
+    // Add now-line to mini timeline
+    mini += `<div class="mini-now-line" style="left:${nowPct}%"></div>`;
     return `<div class="room-card ${occ?'occupied':'available'}" data-room-id="${room.id}">
       <div class="room-card-header"><span class="room-card-name">${room.name}</span>
         <span class="room-card-status ${occ?'status-occupied':'status-available'}">${occ?'IN USE':'Open'}</span></div>
@@ -225,32 +230,147 @@ function renderMonthView() {
   container.querySelectorAll('.month-event-pip').forEach(pip=>{pip.addEventListener('click',e=>{e.stopPropagation();const cell=pip.closest('.month-day'),d=parseDateStr(cell.dataset.date),bks=getBookingsForRoomDate(currentRoomId,d),t=pip.textContent.trim();for(const b of bks)if(t.includes(b.title)){showDeleteModal(b);return;}});});
 }
 
-// ===== TIME SPINNER =====
-function initTimeSpinner(spinnerId, displayId, hiddenId) {
-  const spinner=$(spinnerId), display=$(displayId), hidden=$(hiddenId);
-  let dragging=false, startY=0, startMins=0;
+// ===== TIME INPUT (split hour / minute / ampm) =====
+function initTimeInput(containerId, hiddenId) {
+  const container = $(containerId), hidden = $(hiddenId);
+  const parts = container.querySelectorAll('.time-part');
+  const hourEl = container.querySelector('[data-part="hour"]');
+  const minEl = container.querySelector('[data-part="minute"]');
+  const ampmEl = container.querySelector('[data-part="ampm"]');
 
   function getMins() { return timeToMinutes(hidden.value); }
-  function setMins(m) { m=((m%1440)+1440)%1440; m=Math.round(m/15)*15; if(m>=1440)m=1425; hidden.value=minutesToTime(m); display.textContent=formatTimeDisplay(minutesToTime(m)); }
-  function updateDisplay() { display.textContent=formatTimeDisplay(hidden.value); }
 
-  spinner.addEventListener('mousedown',e=>{e.preventDefault();dragging=true;startY=e.clientY;startMins=getMins();spinner.classList.add('dragging');
-    function onMove(e2){const dy=startY-e2.clientY;const delta=Math.round(dy/8)*15;setMins(startMins+delta);}
-    function onUp(){dragging=false;spinner.classList.remove('dragging');document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);}
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  function setMins(m) {
+    m = ((m % 1440) + 1440) % 1440;
+    m = Math.round(m / 15) * 15;
+    if (m >= 1440) m = 1425;
+    hidden.value = minutesToTime(m);
+    syncDisplay();
+  }
+
+  function syncDisplay() {
+    const m = getMins();
+    const h24 = Math.floor(m / 60);
+    const min = m % 60;
+    const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+    const ap = h24 >= 12 ? 'PM' : 'AM';
+    hourEl.textContent = h12;
+    minEl.textContent = String(min).padStart(2, '0');
+    ampmEl.textContent = ap;
+  }
+
+  // Drag on hour: 1 hour per ~30px drag
+  function setupDrag(el, part) {
+    let startY = 0, startVal = 0, dragging = false;
+
+    el.addEventListener('mousedown', e => {
+      if (el.querySelector('input')) return; // editing mode
+      e.preventDefault();
+      dragging = true; startY = e.clientY; startVal = getMins();
+      el.classList.add('dragging');
+
+      function onMove(e2) {
+        const dy = startY - e2.clientY;
+        if (part === 'hour') {
+          const delta = Math.round(dy / 30) * 60;
+          setMins(startVal + delta);
+        } else {
+          const delta = Math.round(dy / 20) * 15;
+          setMins(startVal + delta);
+        }
+      }
+      function onUp() {
+        dragging = false; el.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Touch drag
+    el.addEventListener('touchstart', e => {
+      if (el.querySelector('input')) return;
+      startY = e.touches[0].clientY; startVal = getMins();
+      el.classList.add('dragging');
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const dy = startY - e.touches[0].clientY;
+      if (part === 'hour') setMins(startVal + Math.round(dy / 30) * 60);
+      else setMins(startVal + Math.round(dy / 20) * 15);
+    }, { passive: false });
+    el.addEventListener('touchend', () => { el.classList.remove('dragging'); });
+
+    // Scroll wheel
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      if (part === 'hour') setMins(getMins() + dir * 60);
+      else setMins(getMins() + dir * 15);
+    }, { passive: false });
+  }
+
+  // Click to type
+  function setupClickEdit(el, part) {
+    el.addEventListener('click', e => {
+      if (el.querySelector('input')) return;
+      el.classList.add('editing');
+      const curVal = el.textContent;
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = curVal;
+      inp.maxLength = 2;
+      el.textContent = '';
+      el.appendChild(inp);
+      inp.focus();
+      inp.select();
+
+      function commit() {
+        const v = parseInt(inp.value, 10);
+        el.classList.remove('editing');
+        if (part === 'hour' && v >= 1 && v <= 12) {
+          const m = getMins();
+          const currentH24 = Math.floor(m / 60);
+          const isPM = currentH24 >= 12;
+          let h24 = v === 12 ? 0 : v;
+          if (isPM) h24 += 12;
+          setMins(h24 * 60 + (m % 60));
+        } else if (part === 'minute' && v >= 0 && v <= 59) {
+          const m = getMins();
+          setMins(Math.floor(m / 60) * 60 + Math.round(v / 15) * 15);
+        } else {
+          syncDisplay(); // revert
+        }
+      }
+      inp.addEventListener('blur', commit);
+      inp.addEventListener('keydown', e2 => {
+        if (e2.key === 'Enter') { e2.preventDefault(); inp.blur(); }
+        if (e2.key === 'Escape') { el.classList.remove('editing'); syncDisplay(); }
+      });
+    });
+  }
+
+  // AM/PM toggle on click
+  ampmEl.addEventListener('click', () => {
+    const m = getMins();
+    if (m >= 720) setMins(m - 720); else setMins(m + 720);
   });
+  ampmEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    const m = getMins();
+    if (m >= 720) setMins(m - 720); else setMins(m + 720);
+  }, { passive: false });
 
-  spinner.addEventListener('wheel',e=>{e.preventDefault();const dir=e.deltaY<0?15:-15;setMins(getMins()+dir);},{passive:false});
+  setupDrag(hourEl, 'hour');
+  setupDrag(minEl, 'minute');
+  setupClickEdit(hourEl, 'hour');
+  setupClickEdit(minEl, 'minute');
 
-  // Touch support
-  spinner.addEventListener('touchstart',e=>{startY=e.touches[0].clientY;startMins=getMins();spinner.classList.add('dragging');},{passive:true});
-  spinner.addEventListener('touchmove',e=>{e.preventDefault();const dy=startY-e.touches[0].clientY;setMins(startMins+Math.round(dy/8)*15);},{passive:false});
-  spinner.addEventListener('touchend',()=>{spinner.classList.remove('dragging');});
-
-  return { setMins, getMins, updateDisplay };
+  return { setMins, getMins, syncDisplay };
 }
 
-let startSpinner, endSpinner;
+let startInput, endInput;
 
 // ===== AUTOCOMPLETE =====
 function getKnownNames() {
@@ -302,8 +422,9 @@ function setupAutocomplete() {
 function openBookingModal(startMinutes) {
   $('modal-title').textContent='New Booking';
   $('booking-title').value=''; $('booking-details').value='';
-  startSpinner.setMins(startMinutes||480); endSpinner.setMins((startMinutes||480)+60);
+  startInput.setMins(startMinutes||480); endInput.setMins((startMinutes||480)+60);
   $('booking-recurring').checked=false; hide('recurring-options');
+  $('booking-recurring-btn').classList.remove('active');
   $('recurring-doctor').value='';
   document.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('selected'));
   $('autocomplete-dropdown').style.display='none';
@@ -385,8 +506,22 @@ function renderSettingsRooms() {
 // ===== NAV =====
 function showSetup(){hide('pin-view');hide('grid-view');hide('room-view');show('setup-view');}
 function showPin(){hide('setup-view');hide('grid-view');hide('room-view');show('pin-view');$('pin-input').focus();}
-function showGrid(){hide('setup-view');hide('pin-view');hide('room-view');show('grid-view');renderFloorTabs();renderGrid();startNowTimer();}
+function showGrid(){hide('setup-view');hide('pin-view');hide('room-view');show('grid-view');renderFloorTabs();renderGrid();startNowTimer();startAutoSync();}
 function startNowTimer(){if(nowTimer)clearInterval(nowTimer);nowTimer=setInterval(()=>{if($('grid-view').style.display!=='none')renderGrid();},60000);}
+
+// Auto-sync every 30 seconds
+let autoSyncTimer=null;
+function startAutoSync(){
+  if(autoSyncTimer)clearInterval(autoSyncTimer);
+  autoSyncTimer=setInterval(async()=>{
+    if(!store)return;
+    try{
+      data=await store.load();
+      if($('grid-view').style.display!=='none')renderGrid();
+      if($('room-view').style.display!=='none')renderRoom();
+    }catch(e){console.warn('Auto-sync failed:',e);}
+  },30000);
+}
 
 // ===== INIT =====
 async function init() {
@@ -400,9 +535,9 @@ async function init() {
 
 // ===== EVENTS =====
 document.addEventListener('DOMContentLoaded',()=>{
-  // Init time spinners
-  startSpinner=initTimeSpinner('start-spinner','start-display','booking-start');
-  endSpinner=initTimeSpinner('end-spinner','end-display','booking-end');
+  // Init time inputs (new split hour/min/ampm)
+  startInput=initTimeInput('start-time-input','booking-start');
+  endInput=initTimeInput('end-time-input','booking-end');
   setupAutocomplete();
 
   // Setup (token only, no PIN setup)
@@ -449,9 +584,31 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('modal-close-btn').addEventListener('click',closeBookingModal);
   $('modal-cancel-btn').addEventListener('click',closeBookingModal);
   $('modal-save-btn').addEventListener('click',saveBooking);
-  $('booking-recurring').addEventListener('change',e=>{if(e.target.checked){show('recurring-options');$('booking-title').placeholder='Auto-filled from doctor name';}else{hide('recurring-options');$('booking-title').placeholder='e.g., Dr. Smith';}});
+
+  // Recurring button toggles the hidden checkbox + options
+  $('booking-recurring-btn').addEventListener('click',()=>{
+    const cb=$('booking-recurring'), btn=$('booking-recurring-btn');
+    cb.checked=!cb.checked;
+    btn.classList.toggle('active',cb.checked);
+    if(cb.checked){show('recurring-options');$('booking-title').placeholder='Auto-filled from doctor name';}
+    else{hide('recurring-options');$('booking-title').placeholder='e.g., Dr. Smith';}
+  });
   $('recurring-doctor').addEventListener('input',()=>{if($('booking-recurring').checked)$('booking-title').value=$('recurring-doctor').value;});
   document.querySelectorAll('.day-btn').forEach(b=>{b.addEventListener('click',e=>{e.preventDefault();b.classList.toggle('selected');});});
+
+  // Enter key saves booking unless details textarea is focused
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Enter' && $('booking-modal').style.display!=='none'){
+      const active=document.activeElement;
+      // Don't trigger if typing in details textarea or autocomplete is showing
+      if(active && active.id==='booking-details') return;
+      if($('autocomplete-dropdown').style.display!=='none') return;
+      // Don't trigger if inside a time-part input
+      if(active && active.closest && active.closest('.time-part')) return;
+      e.preventDefault();
+      saveBooking();
+    }
+  });
 
   // Delete
   $('delete-modal-close').addEventListener('click',closeDeleteModal);

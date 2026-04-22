@@ -141,28 +141,30 @@
           <div class="form-row">
             <div class="form-group">
               <label>Start Time</label>
-              <div class="time-spinner" id="start-spinner">
-                <div class="time-spinner-display" id="start-display">8:00 AM</div>
-                <div class="time-spinner-hint">scroll or drag to adjust</div>
+              <div class="time-input" id="start-time-input">
+                <div class="time-part" data-part="hour" id="start-hour">8</div>
+                <div class="time-sep">:</div>
+                <div class="time-part" data-part="minute" id="start-min">00</div>
+                <div class="time-part time-ampm" data-part="ampm" id="start-ampm">AM</div>
                 <input type="hidden" id="booking-start" value="08:00">
               </div>
             </div>
             <div class="form-group">
               <label>End Time</label>
-              <div class="time-spinner" id="end-spinner">
-                <div class="time-spinner-display" id="end-display">9:00 AM</div>
-                <div class="time-spinner-hint">scroll or drag to adjust</div>
+              <div class="time-input" id="end-time-input">
+                <div class="time-part" data-part="hour" id="end-hour">9</div>
+                <div class="time-sep">:</div>
+                <div class="time-part" data-part="minute" id="end-min">00</div>
+                <div class="time-part time-ampm" data-part="ampm" id="end-ampm">AM</div>
                 <input type="hidden" id="booking-end" value="09:00">
               </div>
             </div>
           </div>
-          <div class="form-group">
-            <label class="toggle-label">
-              <span>Permanent / Recurring Office?</span>
-              <input type="checkbox" id="booking-recurring" class="toggle-input">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
+          <button type="button" class="recurring-btn" id="booking-recurring-btn">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+            Permanent / Recurring Office
+          </button>
+          <input type="checkbox" id="booking-recurring" class="toggle-input" style="display:none;">
           <div id="recurring-options" style="display:none;">
             <div class="form-group">
               <label>Doctor Name</label>
