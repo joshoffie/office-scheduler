@@ -425,7 +425,7 @@ function setupDragCreate(evCol, scrollParent) {
     if (e.button !== 0 || e.target.closest('.event-block') || e.target.closest('.quick-add-block')) return;
     e.preventDefault();
     dragging = true;
-    const y = e.clientY - evCol.getBoundingClientRect().top + scrollParent.scrollTop;
+    const y = e.clientY - evCol.getBoundingClientRect().top;
     startMin = Math.round(y / 15) * 15;
     endMin = startMin + 15;
 
@@ -438,7 +438,7 @@ function setupDragCreate(evCol, scrollParent) {
     evCol.appendChild(preview);
 
     function onMove(e2) {
-      const y2 = e2.clientY - evCol.getBoundingClientRect().top + scrollParent.scrollTop;
+      const y2 = e2.clientY - evCol.getBoundingClientRect().top;
       endMin = Math.round(y2 / 15) * 15;
       // Allow dragging up or down
       const top = Math.min(startMin, endMin);
