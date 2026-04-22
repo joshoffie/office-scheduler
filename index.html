@@ -10,7 +10,7 @@
 </head>
 <body>
   <div id="app">
-    <!-- Setup Wizard -->
+    <!-- Setup Wizard (GitHub token only — PIN is hardcoded) -->
     <div id="setup-view" class="view" style="display:none;">
       <div class="setup-card">
         <div class="setup-logo">
@@ -25,21 +25,12 @@
         <h1>Office Scheduler Setup</h1>
         <p class="setup-subtitle">First-time setup. Data is stored securely in your GitHub repository.</p>
 
-        <div class="setup-step" id="setup-step-1">
+        <div class="setup-step">
           <div class="step-number">1</div>
           <div class="step-content">
             <h3>GitHub Access Token</h3>
             <p>Paste a GitHub Personal Access Token with <strong>repo</strong> scope. This stays in your browser only.</p>
             <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-          </div>
-        </div>
-
-        <div class="setup-step" id="setup-step-2">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Set Access PIN</h3>
-            <p>Create a PIN that staff will use to access the scheduler.</p>
-            <input type="text" id="setup-pin-input" placeholder="Enter a PIN (e.g., 1234)" maxlength="10" autocomplete="off">
           </div>
         </div>
 
@@ -106,16 +97,17 @@
           <h2 class="room-title" id="room-title">Room 1</h2>
         </div>
         <div class="top-bar-center">
-          <button class="icon-btn" id="prev-week-btn">
+          <button class="icon-btn" id="prev-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
           </button>
           <span class="date-picker-btn" id="room-date-display"></span>
-          <button class="icon-btn" id="next-week-btn">
+          <button class="icon-btn" id="next-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
           </button>
           <button class="btn btn-sm" id="today-btn">Today</button>
           <div class="view-toggle" id="view-toggle">
-            <button class="view-toggle-btn active" data-view="week">Week</button>
+            <button class="view-toggle-btn active" data-view="day">Day</button>
+            <button class="view-toggle-btn" data-view="week">Week</button>
             <button class="view-toggle-btn" data-view="month">Month</button>
           </div>
         </div>
@@ -123,7 +115,7 @@
           <button class="icon-btn" id="room-sync-btn" title="Sync / Refresh">
             <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
           </button>
-          <button class="btn btn-primary btn-sm" id="add-booking-btn">+ Add Booking</button>
+          <button class="btn btn-primary" id="add-booking-btn">+ Add Booking</button>
         </div>
       </header>
       <div class="calendar-container" id="calendar-container"></div>
@@ -137,9 +129,10 @@
           <button class="icon-btn modal-close" id="modal-close-btn">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
+          <div class="form-group" style="position:relative;">
             <label>Title</label>
-            <input type="text" id="booking-title" placeholder="e.g., Dr. Smith, Patient Visit">
+            <input type="text" id="booking-title" placeholder="e.g., Dr. Smith, Patient Visit" autocomplete="off">
+            <div id="autocomplete-dropdown" class="autocomplete-dropdown" style="display:none;"></div>
           </div>
           <div class="form-group">
             <label>Details</label>
@@ -148,11 +141,19 @@
           <div class="form-row">
             <div class="form-group">
               <label>Start Time</label>
-              <input type="time" id="booking-start">
+              <div class="time-spinner" id="start-spinner">
+                <div class="time-spinner-display" id="start-display">8:00 AM</div>
+                <div class="time-spinner-hint">scroll or drag to adjust</div>
+                <input type="hidden" id="booking-start" value="08:00">
+              </div>
             </div>
             <div class="form-group">
               <label>End Time</label>
-              <input type="time" id="booking-end">
+              <div class="time-spinner" id="end-spinner">
+                <div class="time-spinner-display" id="end-display">9:00 AM</div>
+                <div class="time-spinner-hint">scroll or drag to adjust</div>
+                <input type="hidden" id="booking-end" value="09:00">
+              </div>
             </div>
           </div>
           <div class="form-group">
@@ -228,15 +229,9 @@
           </div>
           <div class="settings-section">
             <h4>Rooms on <span id="settings-floor-name">Floor 1</span></h4>
+            <div class="settings-floor-picker" id="settings-floor-picker"></div>
             <div id="room-list" class="settings-list"></div>
             <button class="btn btn-sm" id="add-room-btn">+ Add Room</button>
-          </div>
-          <div class="settings-section">
-            <h4>Change PIN</h4>
-            <div class="form-row">
-              <input type="text" id="new-pin-input" placeholder="New PIN" maxlength="10">
-              <button class="btn btn-sm btn-primary" id="save-pin-btn">Update</button>
-            </div>
           </div>
           <div class="settings-section">
             <h4>Reset</h4>

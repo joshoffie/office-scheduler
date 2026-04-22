@@ -384,6 +384,18 @@ textarea { resize: vertical; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Now line */
+.now-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: var(--red-500); z-index: 10;
+  pointer-events: none;
+}
+.now-dot {
+  position: absolute; left: -5px; top: -4px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--red-500);
+}
+
 /* ===== MODALS ===== */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.3);
@@ -441,6 +453,61 @@ textarea { resize: vertical; }
 }
 .day-btn:hover { border-color: var(--blue-400); }
 .day-btn.selected { background: var(--blue-600); color: white; border-color: var(--blue-600); }
+
+/* Time spinner */
+.time-spinner {
+  background: white; border: 1px solid var(--gray-300);
+  border-radius: var(--radius); padding: 12px 16px;
+  text-align: center; cursor: ns-resize; user-select: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  position: relative;
+}
+.time-spinner:hover { border-color: var(--blue-400); }
+.time-spinner:active, .time-spinner.dragging {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+.time-spinner-display {
+  font-size: 22px; font-weight: 700; color: var(--gray-800);
+  pointer-events: none;
+}
+.time-spinner-hint {
+  font-size: 10px; color: var(--gray-400); margin-top: 2px;
+  pointer-events: none;
+}
+
+/* Autocomplete */
+.autocomplete-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: white; border: 1px solid var(--gray-200);
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow-md); z-index: 10;
+  max-height: 150px; overflow-y: auto;
+}
+.autocomplete-item {
+  padding: 8px 12px; font-size: 14px; cursor: pointer;
+  transition: background var(--transition);
+}
+.autocomplete-item:hover, .autocomplete-item.active {
+  background: var(--blue-50); color: var(--blue-700);
+}
+.autocomplete-hint {
+  padding: 6px 12px; font-size: 11px; color: var(--gray-400);
+  border-top: 1px solid var(--gray-100);
+}
+
+/* Settings floor picker */
+.settings-floor-picker {
+  display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.settings-floor-pick-btn {
+  padding: 4px 12px; border-radius: 16px; border: 1px solid var(--gray-300);
+  background: white; color: var(--gray-600); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+}
+.settings-floor-pick-btn.active {
+  background: var(--blue-600); color: white; border-color: var(--blue-600);
+}
 
 /* Radio labels */
 .radio-label {
