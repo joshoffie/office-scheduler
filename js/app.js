@@ -4,6 +4,7 @@ const REPO_NAME = 'office-scheduler';
 const DATA_FILE = 'data.json';
 const BRANCH = 'main';
 const HARDCODED_PIN = '1999';
+const PRUNE_DAYS = 60; // auto-delete one-time bookings older than this
 
 // ===== GITHUB STORAGE LAYER =====
 class GitHubStore {
@@ -34,7 +35,8 @@ class GitHubStore {
     }
   }
   async saveRaw(data) {
-    const body = { message: `Update ${new Date().toISOString()}`, content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))), branch: BRANCH };
+    // Compact JSON (no pretty-print) to minimize file size
+    const body = { message: `Update ${new Date().toISOString()}`, content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))), branch: BRANCH };
     if (this.sha) body.sha = this.sha;
     const res = await fetch(this.baseUrl, { method: 'PUT', headers: this.headers(), body: JSON.stringify(body) });
     if (res.status === 409) { await this.load(); return this.saveRaw(data); }
@@ -47,6 +49,28 @@ class GitHubStore {
     for (let i = 1; i <= 30; i++) rooms.push({ id: `room-${i}`, name: `Room ${i}`, floorId: 'floor-1', order: i - 1 });
     return { floors, rooms, bookings: [], recurringRules: [], knownNames: [] };
   }
+}
+
+// ===== AUTO-PRUNE OLD DATA =====
+function pruneOldData(data) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - PRUNE_DAYS);
+  const cutoffStr = dateStr(cutoff);
+
+  const beforeCount = data.bookings.length;
+  // Remove one-time bookings older than PRUNE_DAYS
+  data.bookings = data.bookings.filter(b => b.date >= cutoffStr);
+
+  // Prune old exception dates from recurring rules (no need to track exceptions from months ago)
+  for (const rule of data.recurringRules) {
+    if (rule.exceptions && rule.exceptions.length > 0) {
+      rule.exceptions = rule.exceptions.filter(d => d >= cutoffStr);
+    }
+  }
+
+  const pruned = beforeCount - data.bookings.length;
+  if (pruned > 0) console.log(`Pruned ${pruned} bookings older than ${PRUNE_DAYS} days`);
+  return pruned > 0;
 }
 
 // ===== APP STATE =====
@@ -517,6 +541,7 @@ function startAutoSync(){
     if(!store)return;
     try{
       data=await store.load();
+      pruneOldData(data); // lightweight check, only saves if something was pruned
       if($('grid-view').style.display!=='none')renderGrid();
       if($('room-view').style.display!=='none')renderRoom();
     }catch(e){console.warn('Auto-sync failed:',e);}
@@ -529,6 +554,8 @@ async function init() {
   if(!token){showSetup();return;}
   store=new GitHubStore(token);
   try{data=await store.load();}catch(e){console.error(e);toast('Failed to connect');showSetup();return;}
+  // Auto-prune old bookings on startup
+  if(pruneOldData(data)){try{await store.save(data);console.log('Pruned data saved');}catch(e){console.warn('Prune save failed:',e);}}
   const session=sessionStorage.getItem('pin_ok');
   if(session==='true'){showGrid();}else{showPin();}
 }
