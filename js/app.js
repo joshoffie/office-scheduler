@@ -27,7 +27,6 @@ class GitHubStore {
     try {
       const res = await fetch(this.baseUrl + `?ref=${BRANCH}&t=${Date.now()}`, { headers: this.headers() });
       if (res.status === 404) {
-        // File doesn't exist yet, create with defaults
         const defaults = this.defaultData();
         await this.saveRaw(defaults);
         return defaults;
@@ -45,7 +44,6 @@ class GitHubStore {
   }
 
   async save(data) {
-    // Debounce: if already saving, queue the latest
     if (this.saving) {
       this.pendingSave = data;
       return;
@@ -79,9 +77,7 @@ class GitHubStore {
     });
 
     if (res.status === 409) {
-      // Conflict — re-fetch and retry
       await this.load();
-      // Merge: our data wins (last-write-wins)
       return this.saveRaw(data);
     }
     if (!res.ok) {
@@ -96,12 +92,7 @@ class GitHubStore {
     const floors = [{ id: 'floor-1', name: 'Floor 1', order: 0 }];
     const rooms = [];
     for (let i = 1; i <= 30; i++) {
-      rooms.push({
-        id: `room-${i}`,
-        name: `Room ${i}`,
-        floorId: 'floor-1',
-        order: i - 1,
-      });
+      rooms.push({ id: `room-${i}`, name: `Room ${i}`, floorId: 'floor-1', order: i - 1 });
     }
     return { floors, rooms, bookings: [], recurringRules: [], pin: '' };
   }
@@ -112,9 +103,10 @@ let store = null;
 let data = null;
 let currentFloorId = 'floor-1';
 let currentRoomId = null;
-let selectedDate = new Date();
-let editingBookingId = null;
+let selectedDate = new Date();  // anchor date for week/month views
+let roomViewMode = 'week';      // 'week' or 'month'
 let deletingBooking = null;
+let bookingDate = null;         // the specific date for a new booking from week/month click
 let nowTimer = null;
 
 // ===== UTILITY =====
@@ -123,14 +115,19 @@ function show(id) { $(id).style.display = ''; }
 function hide(id) { $(id).style.display = 'none'; }
 function genId() { return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
 
-function formatDate(d) {
+function dateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function formatDateShort(d) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+function formatDateFull(d) {
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
-function dateStr(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function timeToMinutes(t) {
@@ -163,23 +160,42 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
+// Date helpers
+function getWeekStart(d) {
+  const dt = new Date(d);
+  dt.setDate(dt.getDate() - dt.getDay()); // Sunday
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+function getMonthStart(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function addDays(d, n) {
+  const dt = new Date(d);
+  dt.setDate(dt.getDate() + n);
+  return dt;
+}
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 // ===== GET BOOKINGS FOR A ROOM+DATE =====
 function getBookingsForRoomDate(roomId, date) {
   const ds = dateStr(date);
   const dayOfWeek = date.getDay();
   const results = [];
 
-  // One-time bookings
   for (const b of data.bookings) {
     if (b.roomId === roomId && b.date === ds) {
       results.push({ ...b, isRecurring: false });
     }
   }
 
-  // Recurring rules
   for (const r of data.recurringRules) {
     if (r.roomId === roomId && r.daysOfWeek.includes(dayOfWeek)) {
-      // Check if there's an exception for this date
       const exceptions = r.exceptions || [];
       if (!exceptions.includes(ds)) {
         results.push({
@@ -219,37 +235,35 @@ function renderGrid() {
     .filter(r => r.floorId === currentFloorId)
     .sort((a, b) => a.order - b.order);
 
-  $('grid-date-display').textContent = formatDate(new Date());
+  $('grid-date-display').textContent = formatDateFull(new Date());
+
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
 
   grid.innerHTML = floorRooms.map(room => {
     const occupant = getCurrentOccupant(room.id);
     const isOccupied = !!occupant;
-    const bookings = getBookingsForRoomDate(room.id, new Date());
+    const bookings = getBookingsForRoomDate(room.id, now);
 
-    // Build mini-timeline blocks
+    // Mini-timeline: show future blocks highlighted
     let miniBlocks = '';
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-
     for (const b of bookings) {
       const start = timeToMinutes(b.startTime);
       const end = timeToMinutes(b.endTime);
       const leftPct = (start / 1440) * 100;
       const widthPct = ((end - start) / 1440) * 100;
       const isCurrent = start <= nowMins && end > nowMins;
-      miniBlocks += `<div class="mini-block${isCurrent ? ' current' : ''}" style="left:${leftPct}%;width:${widthPct}%"></div>`;
+      const isFuture = start > nowMins;
+      const cls = isCurrent ? ' current' : isFuture ? ' future' : '';
+      miniBlocks += `<div class="mini-block${cls}" style="left:${leftPct}%;width:${widthPct}%"></div>`;
     }
-
-    // Now-line
-    const nowPct = (nowMins / 1440) * 100;
-    miniBlocks += `<div class="mini-now-line" style="left:${nowPct}%"></div>`;
 
     return `
       <div class="room-card ${isOccupied ? 'occupied' : 'available'}" data-room-id="${room.id}">
         <div class="room-card-header">
           <span class="room-card-name">${room.name}</span>
           <span class="room-card-status ${isOccupied ? 'status-occupied' : 'status-available'}">
-            ${isOccupied ? 'In Use' : 'Open'}
+            ${isOccupied ? 'IN USE' : 'Open'}
           </span>
         </div>
         <div class="room-card-occupant">${isOccupied ? occupant.title : ''}</div>
@@ -258,7 +272,6 @@ function renderGrid() {
     `;
   }).join('');
 
-  // Click handlers
   grid.querySelectorAll('.room-card').forEach(card => {
     card.addEventListener('click', () => openRoom(card.dataset.roomId));
   });
@@ -280,7 +293,7 @@ function renderFloorTabs() {
   });
 }
 
-// ===== RENDER: ROOM CALENDAR =====
+// ===== RENDER: ROOM VIEW =====
 function openRoom(roomId) {
   currentRoomId = roomId;
   selectedDate = new Date();
@@ -294,95 +307,218 @@ function renderRoom() {
   if (!room) return;
 
   $('room-title').textContent = room.name;
-  $('room-date-display').textContent = formatDate(selectedDate);
+  updateViewToggle();
 
-  // Time column
-  const timeCol = $('time-column');
-  timeCol.innerHTML = '';
+  if (roomViewMode === 'week') {
+    renderWeekView();
+  } else {
+    renderMonthView();
+  }
+}
+
+function updateViewToggle() {
+  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === roomViewMode);
+  });
+}
+
+// ===== WEEK VIEW =====
+function renderWeekView() {
+  const container = $('calendar-container');
+  const weekStart = getWeekStart(selectedDate);
+  const weekEnd = addDays(weekStart, 6);
+  const today = new Date();
+
+  // Header label
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (weekStart.getMonth() === weekEnd.getMonth()) {
+    $('room-date-display').textContent = `${months[weekStart.getMonth()]} ${weekStart.getDate()} – ${weekEnd.getDate()}, ${weekStart.getFullYear()}`;
+  } else {
+    $('room-date-display').textContent = `${formatDateShort(weekStart)} – ${formatDateShort(weekEnd)}, ${weekEnd.getFullYear()}`;
+  }
+
+  // Build week header
+  let headerHTML = '<div class="week-header-corner"></div>';
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(weekStart, i);
+    const isToday = sameDay(d, today);
+    headerHTML += `<div class="week-header-cell${isToday ? ' today' : ''}">
+      ${dayNames[d.getDay()]}
+      <span class="day-num">${d.getDate()}</span>
+    </div>`;
+  }
+
+  // Build time labels
+  let timeHTML = '';
   for (let h = 0; h < 24; h++) {
-    const label = document.createElement('div');
-    label.className = 'time-label';
     const ampm = h >= 12 ? 'PM' : 'AM';
     const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    label.textContent = `${h12} ${ampm}`;
-    timeCol.appendChild(label);
+    timeHTML += `<div class="week-time-label">${h12} ${ampm}</div>`;
   }
 
-  // Events column
-  const evCol = $('events-column');
-  evCol.innerHTML = '';
+  // Build day columns with events
+  let dayColsHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(weekStart, i);
+    const ds = dateStr(d);
+    const bookings = getBookingsForRoomDate(currentRoomId, d);
 
-  // Hour lines
-  for (let h = 0; h < 24; h++) {
-    const line = document.createElement('div');
-    line.className = 'hour-line';
-    line.style.top = `${h * 60}px`;
-    evCol.appendChild(line);
+    let hourLines = '';
+    for (let h = 0; h < 24; h++) {
+      hourLines += `<div class="week-hour-line" style="top:${h * 60}px"></div>`;
+    }
 
-    const halfLine = document.createElement('div');
-    halfLine.className = 'hour-line half';
-    halfLine.style.top = `${h * 60 + 30}px`;
-    evCol.appendChild(halfLine);
+    let eventsHTML = '';
+    for (const b of bookings) {
+      const startMins = timeToMinutes(b.startTime);
+      const endMins = timeToMinutes(b.endTime);
+      const height = Math.max(endMins - startMins, 15);
+      const cls = b.isRecurring ? ' recurring' : '';
+      eventsHTML += `<div class="week-event${cls}" style="top:${startMins}px;height:${height}px" data-booking='${JSON.stringify(b).replace(/'/g, "&#39;")}'>
+        <div class="week-event-title">${b.title}</div>
+        ${height >= 30 ? `<div class="week-event-time">${formatTimeDisplay(b.startTime)}</div>` : ''}
+      </div>`;
+    }
+
+    dayColsHTML += `<div class="week-day-col" data-date="${ds}">${hourLines}${eventsHTML}</div>`;
   }
 
-  // Now line (if viewing today)
-  const now = new Date();
-  if (dateStr(selectedDate) === dateStr(now)) {
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    const nowLine = document.createElement('div');
-    nowLine.className = 'now-line';
-    nowLine.style.top = `${nowMins}px`;
-    nowLine.innerHTML = '<div class="now-dot"></div>';
-    evCol.appendChild(nowLine);
+  container.innerHTML = `
+    <div class="week-view">
+      <div class="week-header">${headerHTML}</div>
+      <div class="week-body" id="week-body">
+        <div class="week-time-col">${timeHTML}</div>
+        ${dayColsHTML}
+      </div>
+    </div>
+  `;
+
+  // Scroll to 7am
+  const body = $('week-body');
+  if (body) {
+    if (sameDay(selectedDate, today)) {
+      body.scrollTop = Math.max(0, today.getHours() * 60 - 60);
+    } else {
+      body.scrollTop = 7 * 60;
+    }
   }
 
-  // Event blocks
-  const bookings = getBookingsForRoomDate(currentRoomId, selectedDate);
-  for (const b of bookings) {
-    const startMins = timeToMinutes(b.startTime);
-    const endMins = timeToMinutes(b.endTime);
-    const height = Math.max(endMins - startMins, 15);
-
-    const block = document.createElement('div');
-    block.className = `event-block${b.isRecurring ? ' recurring' : ''}`;
-    block.style.top = `${startMins}px`;
-    block.style.height = `${height}px`;
-    block.innerHTML = `
-      <div class="event-title">${b.title}</div>
-      <div class="event-time">${formatTimeDisplay(b.startTime)} – ${formatTimeDisplay(b.endTime)}</div>
-      ${b.details && !b.isRecurring ? `<div class="event-details">${b.details}</div>` : ''}
-      ${b.isRecurring ? `<div class="event-details">Recurring office</div>` : ''}
-    `;
-
-    block.addEventListener('click', (e) => {
+  // Event: click on event block to delete
+  container.querySelectorAll('.week-event').forEach(el => {
+    el.addEventListener('click', (e) => {
       e.stopPropagation();
-      showDeleteModal(b);
+      const booking = JSON.parse(el.dataset.booking);
+      showDeleteModal(booking);
     });
-
-    evCol.appendChild(block);
-  }
-
-  // Double-click to add
-  evCol.addEventListener('dblclick', (e) => {
-    if (e.target.closest('.event-block')) return;
-    const rect = evCol.getBoundingClientRect();
-    const y = e.clientY - rect.top + evCol.parentElement.scrollTop;
-    const mins = Math.round(y / 15) * 15;
-    openBookingModal(mins);
   });
 
-  // Scroll to ~7am or now
+  // Event: double-click on day column to add booking
+  container.querySelectorAll('.week-day-col').forEach(col => {
+    col.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.week-event')) return;
+      const rect = col.getBoundingClientRect();
+      const y = e.clientY - rect.top + col.parentElement.scrollTop;
+      const mins = Math.round(y / 15) * 15;
+      bookingDate = col.dataset.date;
+      openBookingModal(mins);
+    });
+  });
+}
+
+// ===== MONTH VIEW =====
+function renderMonthView() {
   const container = $('calendar-container');
-  if (dateStr(selectedDate) === dateStr(now)) {
-    container.scrollTop = Math.max(0, now.getHours() * 60 - 60);
-  } else {
-    container.scrollTop = 7 * 60;
+  const today = new Date();
+  const year = selectedDate.getFullYear();
+  const month = selectedDate.getMonth();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  $('room-date-display').textContent = `${months[month]} ${year}`;
+
+  // First day of month
+  const firstDay = new Date(year, month, 1);
+  const startDay = getWeekStart(firstDay); // Sunday before or on the 1st
+  const lastDay = new Date(year, month + 1, 0);
+  // End on Saturday after last day
+  const endDay = addDays(lastDay, 6 - lastDay.getDay());
+
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let headerHTML = dayNames.map(d => `<div class="month-header-cell">${d}</div>`).join('');
+
+  let daysHTML = '';
+  let cursor = new Date(startDay);
+  while (cursor <= endDay) {
+    const d = new Date(cursor);
+    const ds = dateStr(d);
+    const isOtherMonth = d.getMonth() !== month;
+    const isToday = sameDay(d, today);
+    const bookings = getBookingsForRoomDate(currentRoomId, d);
+
+    let pipsHTML = '';
+    const maxShow = 3;
+    for (let i = 0; i < Math.min(bookings.length, maxShow); i++) {
+      const b = bookings[i];
+      const cls = b.isRecurring ? 'recurring' : 'booking';
+      pipsHTML += `<div class="month-event-pip ${cls}">${formatTimeDisplay(b.startTime)} ${b.title}</div>`;
+    }
+    if (bookings.length > maxShow) {
+      pipsHTML += `<div class="month-event-more">+${bookings.length - maxShow} more</div>`;
+    }
+
+    const classes = ['month-day'];
+    if (isOtherMonth) classes.push('other-month');
+    if (isToday) classes.push('today');
+
+    daysHTML += `<div class="${classes.join(' ')}" data-date="${ds}">
+      <div class="month-day-num">${d.getDate()}</div>
+      ${pipsHTML}
+    </div>`;
+
+    cursor = addDays(cursor, 1);
   }
+
+  container.innerHTML = `
+    <div class="month-view">
+      <div class="month-grid">
+        ${headerHTML}
+        ${daysHTML}
+      </div>
+    </div>
+  `;
+
+  // Double-click on a day to add booking
+  container.querySelectorAll('.month-day').forEach(cell => {
+    cell.addEventListener('dblclick', () => {
+      bookingDate = cell.dataset.date;
+      openBookingModal(480); // default 8am
+    });
+  });
+
+  // Click event pips to delete
+  container.querySelectorAll('.month-event-pip').forEach(pip => {
+    pip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Find the booking — get the date from parent, then match
+      const cell = pip.closest('.month-day');
+      const ds = cell.dataset.date;
+      const parts = ds.split('-');
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      const bookings = getBookingsForRoomDate(currentRoomId, d);
+      // Match by title + time from pip text
+      const pipText = pip.textContent.trim();
+      for (const b of bookings) {
+        if (pipText.includes(b.title)) {
+          showDeleteModal(b);
+          return;
+        }
+      }
+    });
+  });
 }
 
 // ===== BOOKING MODAL =====
 function openBookingModal(startMinutes) {
-  editingBookingId = null;
   $('modal-title').textContent = 'New Booking';
   $('booking-title').value = '';
   $('booking-details').value = '';
@@ -398,6 +534,7 @@ function openBookingModal(startMinutes) {
 
 function closeBookingModal() {
   hide('booking-modal');
+  bookingDate = null;
 }
 
 async function saveBooking() {
@@ -417,7 +554,7 @@ async function saveBooking() {
     if (!doctor) { toast('Please enter the doctor name'); return; }
     if (selectedDays.length === 0) { toast('Please select at least one day'); return; }
 
-    const rule = {
+    data.recurringRules.push({
       id: genId(),
       roomId: currentRoomId,
       doctorName: doctor,
@@ -426,45 +563,36 @@ async function saveBooking() {
       endTime,
       exceptions: [],
       createdAt: new Date().toISOString(),
-    };
-    data.recurringRules.push(rule);
+    });
   } else {
-    const booking = {
+    // Use bookingDate if set (from clicking a specific day), otherwise selectedDate
+    const useDate = bookingDate || dateStr(selectedDate);
+    data.bookings.push({
       id: genId(),
       roomId: currentRoomId,
       title,
       details,
-      date: dateStr(selectedDate),
+      date: useDate,
       startTime,
       endTime,
       createdAt: new Date().toISOString(),
-    };
-    data.bookings.push(booking);
+    });
   }
 
   closeBookingModal();
   renderRoom();
   toast('Booking saved');
 
-  try {
-    await store.save(data);
-  } catch (err) {
-    toast('Error saving — please retry');
-    console.error(err);
-  }
+  try { await store.save(data); }
+  catch (err) { toast('Error saving — please retry'); console.error(err); }
 }
 
 // ===== DELETE MODAL =====
 function showDeleteModal(booking) {
   deletingBooking = booking;
   $('delete-confirm-text').textContent = `Delete "${booking.title}"?`;
-
-  if (booking.isRecurring) {
-    show('delete-recurring-options');
-  } else {
-    hide('delete-recurring-options');
-  }
-
+  if (booking.isRecurring) { show('delete-recurring-options'); }
+  else { hide('delete-recurring-options'); }
   show('delete-modal');
 }
 
@@ -483,7 +611,6 @@ async function confirmDelete() {
       if (scope === 'all') {
         data.recurringRules = data.recurringRules.filter(r => r.id !== deletingBooking.ruleId);
       } else {
-        // Add exception for this date
         if (!rule.exceptions) rule.exceptions = [];
         rule.exceptions.push(deletingBooking.date);
       }
@@ -496,12 +623,8 @@ async function confirmDelete() {
   renderRoom();
   toast('Booking deleted');
 
-  try {
-    await store.save(data);
-  } catch (err) {
-    toast('Error saving — please retry');
-    console.error(err);
-  }
+  try { await store.save(data); }
+  catch (err) { toast('Error saving — please retry'); console.error(err); }
 }
 
 // ===== SETTINGS =====
@@ -512,9 +635,7 @@ function openSettings() {
   show('settings-modal');
 }
 
-function closeSettings() {
-  hide('settings-modal');
-}
+function closeSettings() { hide('settings-modal'); }
 
 function renderSettingsFloors() {
   const list = $('floor-list');
@@ -522,7 +643,7 @@ function renderSettingsFloors() {
     .sort((a, b) => a.order - b.order)
     .map(f => `
       <div class="settings-item" data-id="${f.id}">
-        <input type="text" value="${f.name}" data-field="name" data-id="${f.id}">
+        <input type="text" value="${f.name}" data-id="${f.id}">
         ${data.floors.length > 1 ? `<button class="delete-btn" data-id="${f.id}">&times;</button>` : ''}
       </div>
     `).join('');
@@ -543,14 +664,8 @@ function renderSettingsFloors() {
       const id = btn.dataset.id;
       data.floors = data.floors.filter(f => f.id !== id);
       data.rooms = data.rooms.filter(r => r.floorId !== id);
-      data.bookings = data.bookings.filter(b => {
-        const room = data.rooms.find(r => r.id === b.roomId);
-        return room;
-      });
-      data.recurringRules = data.recurringRules.filter(r => {
-        const room = data.rooms.find(rm => rm.id === r.roomId);
-        return room;
-      });
+      data.bookings = data.bookings.filter(b => data.rooms.some(r => r.id === b.roomId));
+      data.recurringRules = data.recurringRules.filter(r => data.rooms.some(rm => rm.id === r.roomId));
       if (currentFloorId === id) currentFloorId = data.floors[0]?.id || '';
       renderSettingsFloors();
       renderFloorTabs();
@@ -595,62 +710,31 @@ function renderSettingsRooms() {
   });
 }
 
-// ===== SETUP & AUTH =====
-function showSetup() {
-  hide('pin-view');
-  hide('grid-view');
-  hide('room-view');
-  show('setup-view');
-}
-
-function showPin() {
-  hide('setup-view');
-  hide('grid-view');
-  hide('room-view');
-  show('pin-view');
-  $('pin-input').focus();
-}
+// ===== NAVIGATION =====
+function showSetup() { hide('pin-view'); hide('grid-view'); hide('room-view'); show('setup-view'); }
+function showPin() { hide('setup-view'); hide('grid-view'); hide('room-view'); show('pin-view'); $('pin-input').focus(); }
 
 function showGrid() {
-  hide('setup-view');
-  hide('pin-view');
-  hide('room-view');
+  hide('setup-view'); hide('pin-view'); hide('room-view');
   show('grid-view');
   renderFloorTabs();
   renderGrid();
   startNowTimer();
 }
 
-function showRoomView() {
-  hide('setup-view');
-  hide('pin-view');
-  hide('grid-view');
-  show('room-view');
-}
-
 function startNowTimer() {
   if (nowTimer) clearInterval(nowTimer);
   nowTimer = setInterval(() => {
-    if ($('grid-view').style.display !== 'none') {
-      renderGrid();
-    }
-    if ($('room-view').style.display !== 'none') {
-      renderRoom();
-    }
-  }, 60000); // Update every minute
+    if ($('grid-view').style.display !== 'none') renderGrid();
+  }, 60000);
 }
 
 // ===== INIT =====
 async function init() {
   const token = localStorage.getItem('gh_token');
-
-  if (!token) {
-    showSetup();
-    return;
-  }
+  if (!token) { showSetup(); return; }
 
   store = new GitHubStore(token);
-
   try {
     data = await store.load();
   } catch (err) {
@@ -660,19 +744,11 @@ async function init() {
     return;
   }
 
-  // Set PIN if not set
-  if (!data.pin) {
-    showSetup();
-    return;
-  }
+  if (!data.pin) { showSetup(); return; }
 
-  // Check session
   const session = sessionStorage.getItem('pin_ok');
-  if (session === 'true') {
-    showGrid();
-  } else {
-    showPin();
-  }
+  if (session === 'true') { showGrid(); }
+  else { showPin(); }
 }
 
 // ===== EVENT BINDINGS =====
@@ -681,18 +757,10 @@ document.addEventListener('DOMContentLoaded', () => {
   $('setup-save-btn').addEventListener('click', async () => {
     const token = $('github-token-input').value.trim();
     const pin = $('setup-pin-input').value.trim();
-
-    // If there's already a token stored, use it
     const existingToken = localStorage.getItem('gh_token') || token;
 
-    if (!existingToken) {
-      $('setup-error').textContent = 'Please enter a GitHub token.';
-      return;
-    }
-    if (!pin) {
-      $('setup-error').textContent = 'Please enter a PIN.';
-      return;
-    }
+    if (!existingToken) { $('setup-error').textContent = 'Please enter a GitHub token.'; return; }
+    if (!pin) { $('setup-error').textContent = 'Please enter a PIN.'; return; }
 
     $('setup-error').textContent = '';
     $('setup-save-btn').textContent = 'Connecting...';
@@ -728,10 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
       $('pin-error').textContent = 'Incorrect PIN. Please try again.';
     }
   });
-
-  $('pin-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $('pin-submit-btn').click();
-  });
+  $('pin-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pin-submit-btn').click(); });
 
   // Back button
   $('back-btn').addEventListener('click', () => {
@@ -740,14 +805,22 @@ document.addEventListener('DOMContentLoaded', () => {
     showGrid();
   });
 
-  // Date navigation
-  $('prev-day-btn').addEventListener('click', () => {
-    selectedDate.setDate(selectedDate.getDate() - 1);
+  // Week/Month navigation
+  $('prev-week-btn').addEventListener('click', () => {
+    if (roomViewMode === 'week') {
+      selectedDate = addDays(selectedDate, -7);
+    } else {
+      selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
+    }
     renderRoom();
   });
 
-  $('next-day-btn').addEventListener('click', () => {
-    selectedDate.setDate(selectedDate.getDate() + 1);
+  $('next-week-btn').addEventListener('click', () => {
+    if (roomViewMode === 'week') {
+      selectedDate = addDays(selectedDate, 7);
+    } else {
+      selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
+    }
     renderRoom();
   });
 
@@ -756,16 +829,12 @@ document.addEventListener('DOMContentLoaded', () => {
     renderRoom();
   });
 
-  $('room-date-display').addEventListener('click', () => {
-    const picker = $('hidden-date-picker');
-    picker.value = dateStr(selectedDate);
-    picker.showPicker?.();
-    picker.addEventListener('change', function handler() {
-      picker.removeEventListener('change', handler);
-      const parts = picker.value.split('-');
-      selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
-      renderRoom();
-    });
+  // View toggle (Week / Month)
+  $('view-toggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.view-toggle-btn');
+    if (!btn) return;
+    roomViewMode = btn.dataset.view;
+    renderRoom();
   });
 
   // Add booking button
@@ -773,6 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     const mins = now.getHours() * 60 + now.getMinutes();
     const rounded = Math.ceil(mins / 15) * 15;
+    bookingDate = dateStr(now);
     openBookingModal(rounded);
   });
 
@@ -784,7 +854,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('booking-recurring').addEventListener('change', (e) => {
     if (e.target.checked) {
       show('recurring-options');
-      // Auto-fill title with doctor name if recurring
       $('booking-title').placeholder = 'Auto-filled from doctor name';
     } else {
       hide('recurring-options');
@@ -792,19 +861,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Update title when doctor name changes (for recurring)
   $('recurring-doctor').addEventListener('input', () => {
     if ($('booking-recurring').checked) {
       $('booking-title').value = $('recurring-doctor').value;
     }
   });
 
-  // Day picker buttons
   document.querySelectorAll('.day-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      btn.classList.toggle('selected');
-    });
+    btn.addEventListener('click', (e) => { e.preventDefault(); btn.classList.toggle('selected'); });
   });
 
   // Delete modal
@@ -812,7 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('delete-cancel-btn').addEventListener('click', closeDeleteModal);
   $('delete-confirm-btn').addEventListener('click', confirmDelete);
 
-  // Sync / Refresh (shared handler)
+  // Sync / Refresh
   async function syncData(btn) {
     btn.style.animation = 'spin 0.6s linear infinite';
     try {
@@ -832,19 +896,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Settings
   $('settings-btn').addEventListener('click', openSettings);
-  $('settings-close-btn').addEventListener('click', () => {
-    closeSettings();
-    renderGrid();
-  });
+  $('settings-close-btn').addEventListener('click', () => { closeSettings(); renderGrid(); });
 
   $('add-floor-btn').addEventListener('click', async () => {
     const maxOrder = Math.max(0, ...data.floors.map(f => f.order));
-    const newFloor = {
-      id: genId(),
-      name: `Floor ${data.floors.length + 1}`,
-      order: maxOrder + 1,
-    };
-    data.floors.push(newFloor);
+    data.floors.push({ id: genId(), name: `Floor ${data.floors.length + 1}`, order: maxOrder + 1 });
     renderSettingsFloors();
     renderFloorTabs();
     await store.save(data);
@@ -853,13 +909,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('add-room-btn').addEventListener('click', async () => {
     const floorRooms = data.rooms.filter(r => r.floorId === currentFloorId);
     const maxOrder = Math.max(0, ...floorRooms.map(r => r.order));
-    const newRoom = {
-      id: genId(),
-      name: `Room ${floorRooms.length + 1}`,
-      floorId: currentFloorId,
-      order: maxOrder + 1,
-    };
-    data.rooms.push(newRoom);
+    data.rooms.push({ id: genId(), name: `Room ${floorRooms.length + 1}`, floorId: currentFloorId, order: maxOrder + 1 });
     renderSettingsRooms();
     renderGrid();
     await store.save(data);
@@ -884,13 +934,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Close modals on overlay click
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        overlay.style.display = 'none';
-      }
+      if (e.target === overlay) overlay.style.display = 'none';
     });
   });
 
-  // Keyboard shortcut: Escape to close modals
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if ($('booking-modal').style.display !== 'none') closeBookingModal();
@@ -899,6 +946,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Start
   init();
 });

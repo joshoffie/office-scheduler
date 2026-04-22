@@ -106,14 +106,18 @@
           <h2 class="room-title" id="room-title">Room 1</h2>
         </div>
         <div class="top-bar-center">
-          <button class="icon-btn" id="prev-day-btn">
+          <button class="icon-btn" id="prev-week-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
           </button>
-          <button class="date-picker-btn" id="room-date-display"></button>
-          <button class="icon-btn" id="next-day-btn">
+          <span class="date-picker-btn" id="room-date-display"></span>
+          <button class="icon-btn" id="next-week-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
           </button>
           <button class="btn btn-sm" id="today-btn">Today</button>
+          <div class="view-toggle" id="view-toggle">
+            <button class="view-toggle-btn active" data-view="week">Week</button>
+            <button class="view-toggle-btn" data-view="month">Month</button>
+          </div>
         </div>
         <div class="top-bar-right">
           <button class="icon-btn" id="room-sync-btn" title="Sync / Refresh">
@@ -122,10 +126,7 @@
           <button class="btn btn-primary btn-sm" id="add-booking-btn">+ Add Booking</button>
         </div>
       </header>
-      <div class="calendar-container" id="calendar-container">
-        <div class="time-column" id="time-column"></div>
-        <div class="events-column" id="events-column"></div>
-      </div>
+      <div class="calendar-container" id="calendar-container"></div>
     </div>
 
     <!-- Booking Modal -->
@@ -245,8 +246,6 @@
       </div>
     </div>
 
-    <!-- Hidden date input for picker -->
-    <input type="date" id="hidden-date-picker" style="position:absolute;visibility:hidden;top:0;left:0;">
   </div>
 
   <script src="js/app.js" type="module"></script>
