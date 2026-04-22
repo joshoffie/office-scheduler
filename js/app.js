@@ -638,7 +638,7 @@ function renderWeekView() {
 
   let hdr='<div class="week-header-corner"></div>';
   const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  for(let i=0;i<7;i++){const d=addDays(ws,i),isT=sameDay(d,today); hdr+=`<div class="week-header-cell${isT?' today':''}">${dn[d.getDay()]}<span class="day-num">${d.getDate()}</span></div>`;}
+  for(let i=0;i<7;i++){const d=addDays(ws,i),isT=sameDay(d,today); hdr+=`<div class="week-header-cell${isT?' today':''}" data-date="${dateStr(d)}">${dn[d.getDay()]}<span class="day-num">${d.getDate()}</span></div>`;}
 
   let timeHTML='';
   for(let h=0;h<24;h++){const ap=h>=12?'PM':'AM',h12=h===0?12:h>12?h-12:h; timeHTML+=`<div class="week-time-label">${h12} ${ap}</div>`;}
@@ -658,7 +658,22 @@ function renderWeekView() {
   container.innerHTML=`<div class="week-view"><div class="week-header">${hdr}</div><div class="week-body" id="week-body"><div class="week-time-col">${timeHTML}</div>${cols}</div></div>`;
   const body=$('week-body'); if(body){if(sameDay(selectedDate,today)){const nm=today.getHours()*60+today.getMinutes();body.scrollTop=Math.max(0,nm-body.clientHeight/2);}else body.scrollTop=7*60;}
   container.querySelectorAll('.week-event').forEach(el=>{el.addEventListener('click',e=>{e.stopPropagation();showDeleteModal(JSON.parse(el.dataset.booking));});});
-  container.querySelectorAll('.week-day-col').forEach(col=>{col.addEventListener('dblclick',e=>{if(e.target.closest('.week-event'))return;const y=e.clientY-col.getBoundingClientRect().top+col.parentElement.scrollTop;bookingDate=col.dataset.date;openBookingModal(Math.round(y/15)*15);});});
+  // Single-click on empty space or header → switch to day view for that date
+  container.querySelectorAll('.week-day-col').forEach(col=>{
+    col.addEventListener('click',e=>{
+      if(e.target.closest('.week-event'))return;
+      selectedDate=parseDateStr(col.dataset.date);
+      roomViewMode='day';
+      renderRoom();
+    });
+  });
+  container.querySelectorAll('.week-header-cell').forEach(cell=>{
+    cell.addEventListener('click',()=>{
+      selectedDate=parseDateStr(cell.dataset.date);
+      roomViewMode='day';
+      renderRoom();
+    });
+  });
 
   // Drag event blocks to reschedule in week view
   setupEventDrag(container, '.week-event', $('week-body'));
@@ -682,7 +697,15 @@ function renderMonthView() {
     cursor=addDays(cursor,1);
   }
   container.innerHTML=`<div class="month-view"><div class="month-grid">${hdr}${days}</div></div>`;
-  container.querySelectorAll('.month-day').forEach(cell=>{cell.addEventListener('dblclick',()=>{bookingDate=cell.dataset.date;openBookingModal(480);});});
+  // Single-click on a day → switch to day view for that date
+  container.querySelectorAll('.month-day').forEach(cell=>{
+    cell.addEventListener('click',e=>{
+      if(e.target.closest('.month-event-pip')||e.target.closest('.month-event-more'))return;
+      selectedDate=parseDateStr(cell.dataset.date);
+      roomViewMode='day';
+      renderRoom();
+    });
+  });
   container.querySelectorAll('.month-event-pip').forEach(pip=>{pip.addEventListener('click',e=>{e.stopPropagation();const cell=pip.closest('.month-day'),d=parseDateStr(cell.dataset.date),bks=getBookingsForRoomDate(currentRoomId,d),t=pip.textContent.trim();for(const b of bks)if(t.includes(b.title)){showDeleteModal(b);return;}});});
 }
 
