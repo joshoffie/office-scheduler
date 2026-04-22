@@ -4,7 +4,9 @@ const REPO_NAME = 'office-scheduler';
 const DATA_FILE = 'data.json';
 const BRANCH = 'main';
 const HARDCODED_PIN = '1999';
-const PRUNE_DAYS = 60; // auto-delete one-time bookings older than this
+const PRUNE_DAYS = 60; // default: auto-delete one-time bookings older than this
+const MAX_JSON_BYTES = 800000; // 800KB safety limit (GitHub API max is 1MB)
+const PRUNE_TIERS = [60, 30, 14, 7, 3]; // progressively aggressive pruning thresholds
 
 // ===== GITHUB STORAGE LAYER =====
 class GitHubStore {
@@ -29,7 +31,11 @@ class GitHubStore {
   async save(data) {
     if (this.saving) { this.pendingSave = data; return; }
     this.saving = true;
-    try { await this.saveRaw(data); } finally {
+    try {
+      // Pre-save size guard: adaptive prune if approaching limit
+      pruneOldData(data);
+      await this.saveRaw(data);
+    } finally {
       this.saving = false;
       if (this.pendingSave) { const n = this.pendingSave; this.pendingSave = null; await this.save(n); }
     }
@@ -51,26 +57,53 @@ class GitHubStore {
   }
 }
 
-// ===== AUTO-PRUNE OLD DATA =====
-function pruneOldData(data) {
+// ===== AUTO-PRUNE OLD DATA (adaptive) =====
+function pruneAtDays(data, days) {
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - PRUNE_DAYS);
+  cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = dateStr(cutoff);
-
-  const beforeCount = data.bookings.length;
-  // Remove one-time bookings older than PRUNE_DAYS
+  const before = data.bookings.length;
   data.bookings = data.bookings.filter(b => b.date >= cutoffStr);
-
-  // Prune old exception dates from recurring rules (no need to track exceptions from months ago)
   for (const rule of data.recurringRules) {
     if (rule.exceptions && rule.exceptions.length > 0) {
       rule.exceptions = rule.exceptions.filter(d => d >= cutoffStr);
     }
   }
+  return before - data.bookings.length;
+}
 
-  const pruned = beforeCount - data.bookings.length;
-  if (pruned > 0) console.log(`Pruned ${pruned} bookings older than ${PRUNE_DAYS} days`);
-  return pruned > 0;
+function dataSize(data) {
+  return new Blob([JSON.stringify(data)]).size;
+}
+
+function pruneOldData(data) {
+  let totalPruned = 0;
+
+  // First pass: standard prune at default threshold
+  totalPruned += pruneAtDays(data, PRUNE_DAYS);
+
+  // Adaptive: if still too big, progressively prune harder
+  let size = dataSize(data);
+  for (const tier of PRUNE_TIERS) {
+    if (size <= MAX_JSON_BYTES) break;
+    const p = pruneAtDays(data, tier);
+    totalPruned += p;
+    if (p > 0) {
+      size = dataSize(data);
+      console.warn(`Storage pressure: pruned to ${tier} days (${(size/1024).toFixed(0)}KB)`);
+    }
+  }
+
+  // Nuclear option: if STILL too big (tons of recurring rules or rooms), trim knownNames
+  if (size > MAX_JSON_BYTES && data.knownNames && data.knownNames.length > 50) {
+    data.knownNames = data.knownNames.slice(-50);
+    size = dataSize(data);
+    console.warn(`Trimmed knownNames to 50 (${(size/1024).toFixed(0)}KB)`);
+  }
+
+  if (totalPruned > 0) console.log(`Pruned ${totalPruned} old bookings`);
+  if (size > MAX_JSON_BYTES) console.error(`WARNING: data.json is ${(size/1024).toFixed(0)}KB — approaching GitHub 1MB limit!`);
+  return totalPruned > 0;
 }
 
 // ===== APP STATE =====
