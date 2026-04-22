@@ -1,0 +1,194 @@
+{
+  "floors": [
+    {
+      "id": "floor-1",
+      "name": "Floor 1",
+      "order": 0
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Room 1",
+      "floorId": "floor-1",
+      "order": 0
+    },
+    {
+      "id": "room-2",
+      "name": "Room 2",
+      "floorId": "floor-1",
+      "order": 1
+    },
+    {
+      "id": "room-3",
+      "name": "Room 3",
+      "floorId": "floor-1",
+      "order": 2
+    },
+    {
+      "id": "room-4",
+      "name": "Room 4",
+      "floorId": "floor-1",
+      "order": 3
+    },
+    {
+      "id": "room-5",
+      "name": "Room 5",
+      "floorId": "floor-1",
+      "order": 4
+    },
+    {
+      "id": "room-6",
+      "name": "Room 6",
+      "floorId": "floor-1",
+      "order": 5
+    },
+    {
+      "id": "room-7",
+      "name": "Room 7",
+      "floorId": "floor-1",
+      "order": 6
+    },
+    {
+      "id": "room-8",
+      "name": "Room 8",
+      "floorId": "floor-1",
+      "order": 7
+    },
+    {
+      "id": "room-9",
+      "name": "Room 9",
+      "floorId": "floor-1",
+      "order": 8
+    },
+    {
+      "id": "room-10",
+      "name": "Room 10",
+      "floorId": "floor-1",
+      "order": 9
+    },
+    {
+      "id": "room-11",
+      "name": "Room 11",
+      "floorId": "floor-1",
+      "order": 10
+    },
+    {
+      "id": "room-12",
+      "name": "Room 12",
+      "floorId": "floor-1",
+      "order": 11
+    },
+    {
+      "id": "room-13",
+      "name": "Room 13",
+      "floorId": "floor-1",
+      "order": 12
+    },
+    {
+      "id": "room-14",
+      "name": "Room 14",
+      "floorId": "floor-1",
+      "order": 13
+    },
+    {
+      "id": "room-15",
+      "name": "Room 15",
+      "floorId": "floor-1",
+      "order": 14
+    },
+    {
+      "id": "room-16",
+      "name": "Room 16",
+      "floorId": "floor-1",
+      "order": 15
+    },
+    {
+      "id": "room-17",
+      "name": "Room 17",
+      "floorId": "floor-1",
+      "order": 16
+    },
+    {
+      "id": "room-18",
+      "name": "Room 18",
+      "floorId": "floor-1",
+      "order": 17
+    },
+    {
+      "id": "room-19",
+      "name": "Room 19",
+      "floorId": "floor-1",
+      "order": 18
+    },
+    {
+      "id": "room-20",
+      "name": "Room 20",
+      "floorId": "floor-1",
+      "order": 19
+    },
+    {
+      "id": "room-21",
+      "name": "Room 21",
+      "floorId": "floor-1",
+      "order": 20
+    },
+    {
+      "id": "room-22",
+      "name": "Room 22",
+      "floorId": "floor-1",
+      "order": 21
+    },
+    {
+      "id": "room-23",
+      "name": "Room 23",
+      "floorId": "floor-1",
+      "order": 22
+    },
+    {
+      "id": "room-24",
+      "name": "Room 24",
+      "floorId": "floor-1",
+      "order": 23
+    },
+    {
+      "id": "room-25",
+      "name": "Room 25",
+      "floorId": "floor-1",
+      "order": 24
+    },
+    {
+      "id": "room-26",
+      "name": "Room 26",
+      "floorId": "floor-1",
+      "order": 25
+    },
+    {
+      "id": "room-27",
+      "name": "Room 27",
+      "floorId": "floor-1",
+      "order": 26
+    },
+    {
+      "id": "room-28",
+      "name": "Room 28",
+      "floorId": "floor-1",
+      "order": 27
+    },
+    {
+      "id": "room-29",
+      "name": "Room 29",
+      "floorId": "floor-1",
+      "order": 28
+    },
+    {
+      "id": "room-30",
+      "name": "Room 30",
+      "floorId": "floor-1",
+      "order": 29
+    }
+  ],
+  "bookings": [],
+  "recurringRules": [],
+  "pin": ""
+}
