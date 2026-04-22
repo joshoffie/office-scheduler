@@ -168,6 +168,92 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// ===== THEMES =====
+const THEMES = {
+  clinical: {
+    name: 'Clinical',
+    preview: ['#F1F5F9','#FFFFFF','#2563EB'],
+    vars: {
+      '--bg':'#F1F5F9','--card-bg':'#FFFFFF','--surface':'#F8FAFC','--surface-hover':'#F1F5F9',
+      '--border':'#E2E8F0','--text-primary':'#1E293B','--text-secondary':'#64748B',
+      '--gray-50':'#F8FAFC','--gray-100':'#F1F5F9','--gray-200':'#E2E8F0','--gray-300':'#CBD5E1',
+      '--gray-400':'#94A3B8','--gray-500':'#64748B','--gray-600':'#475569','--gray-700':'#334155','--gray-800':'#1E293B',
+    }
+  },
+  warm: {
+    name: 'Warm',
+    preview: ['#FDF8F3','#FFFFFF','#D97706'],
+    vars: {
+      '--bg':'#FDF8F3','--card-bg':'#FFFFFF','--surface':'#FFFAF5','--surface-hover':'#FDF8F3',
+      '--border':'#E8DDD0','--text-primary':'#3D2E1F','--text-secondary':'#8B7355',
+      '--gray-50':'#FFFAF5','--gray-100':'#FDF8F3','--gray-200':'#E8DDD0','--gray-300':'#D4C5B0',
+      '--gray-400':'#A89880','--gray-500':'#8B7355','--gray-600':'#6B5A42','--gray-700':'#4A3D2E','--gray-800':'#3D2E1F',
+    }
+  },
+  midnight: {
+    name: 'Midnight',
+    preview: ['#0F172A','#1E293B','#3B82F6'],
+    vars: {
+      '--bg':'#0F172A','--card-bg':'#1E293B','--surface':'#152035','--surface-hover':'#1E293B',
+      '--border':'#334155','--text-primary':'#F1F5F9','--text-secondary':'#94A3B8',
+      '--gray-50':'#152035','--gray-100':'#1E293B','--gray-200':'#334155','--gray-300':'#475569',
+      '--gray-400':'#94A3B8','--gray-500':'#94A3B8','--gray-600':'#CBD5E1','--gray-700':'#E2E8F0','--gray-800':'#F1F5F9',
+      '--red-50':'#2A1215','--red-100':'#451A1E','--red-700':'#FCA5A5',
+      '--green-50':'#0F2A1E','--green-100':'#14532D',
+      '--blue-50':'#172554','--blue-100':'#1E3A5F',
+    }
+  },
+  ocean: {
+    name: 'Ocean',
+    preview: ['#F0F9FF','#FFFFFF','#0891B2'],
+    vars: {
+      '--bg':'#F0F9FF','--card-bg':'#FFFFFF','--surface':'#F5FBFF','--surface-hover':'#ECF7FF',
+      '--border':'#BAE6FD','--text-primary':'#164E63','--text-secondary':'#4B8CA0',
+      '--gray-50':'#F5FBFF','--gray-100':'#F0F9FF','--gray-200':'#BAE6FD','--gray-300':'#7DD3FC',
+      '--gray-400':'#4B8CA0','--gray-500':'#4B8CA0','--gray-600':'#0C4A6E','--gray-700':'#164E63','--gray-800':'#164E63',
+      '--blue-500':'#0891B2','--blue-600':'#0E7490','--blue-700':'#155E75',
+    }
+  },
+  sage: {
+    name: 'Sage',
+    preview: ['#F2F7F2','#FFFFFF','#16A34A'],
+    vars: {
+      '--bg':'#F2F7F2','--card-bg':'#FFFFFF','--surface':'#F7FAF7','--surface-hover':'#EDF5ED',
+      '--border':'#D1E3D1','--text-primary':'#1A3A1A','--text-secondary':'#5C7A5C',
+      '--gray-50':'#F7FAF7','--gray-100':'#F2F7F2','--gray-200':'#D1E3D1','--gray-300':'#B0CCB0',
+      '--gray-400':'#7A9C7A','--gray-500':'#5C7A5C','--gray-600':'#3D5C3D','--gray-700':'#2A422A','--gray-800':'#1A3A1A',
+      '--blue-500':'#16A34A','--blue-600':'#15803D','--blue-700':'#166534',
+    }
+  },
+};
+
+function applyTheme(themeId) {
+  const theme = THEMES[themeId];
+  if (!theme) return;
+  const root = document.documentElement;
+  for (const [prop, val] of Object.entries(theme.vars)) {
+    root.style.setProperty(prop, val);
+  }
+  localStorage.setItem('theme', themeId);
+  // Update active state in picker
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.toggle('active', c.dataset.theme === themeId));
+}
+
+function initThemePicker() {
+  const picker = $('theme-picker');
+  if (!picker) return;
+  const current = localStorage.getItem('theme') || 'clinical';
+  picker.innerHTML = Object.entries(THEMES).map(([id, t]) =>
+    `<div class="theme-card${id===current?' active':''}" data-theme="${id}">
+      <div class="theme-preview">${t.preview.map(c=>`<span style="background:${c}"></span>`).join('')}</div>
+      ${t.name}
+    </div>`
+  ).join('');
+  picker.querySelectorAll('.theme-card').forEach(card => {
+    card.addEventListener('click', () => applyTheme(card.dataset.theme));
+  });
+}
+
 // ===== DATA =====
 function getBookingsForRoomDate(roomId, date) {
   const ds = dateStr(date), dow = date.getDay(), results = [];
@@ -746,6 +832,7 @@ async function confirmDelete() {
 function openSettings() {
   settingsFloorId = currentFloorId;
   renderSettingsFloors(); renderSettingsFloorPicker(); renderSettingsRooms();
+  initThemePicker();
   show('settings-modal');
 }
 function closeSettings() { hide('settings-modal'); }
@@ -802,6 +889,10 @@ function startAutoSync(){
 
 // ===== INIT =====
 async function init() {
+  // Restore saved theme
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme && THEMES[savedTheme]) applyTheme(savedTheme);
+
   const token=localStorage.getItem('gh_token');
   if(!token){showSetup();return;}
   store=new GitHubStore(token);
