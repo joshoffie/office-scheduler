@@ -329,7 +329,8 @@ textarea { resize: vertical; }
 }
 .week-hour-line {
   position: absolute; left: 0; right: 0; height: 1px;
-  background: var(--gray-100);
+  background: var(--gray-200);
+  z-index: 1;
 }
 
 /* Week event blocks */
@@ -408,7 +409,8 @@ textarea { resize: vertical; }
 }
 .hour-line {
   position: absolute; left: 0; right: 0; height: 1px;
-  background: var(--gray-100);
+  background: var(--gray-200);
+  z-index: 1;
 }
 
 /* Day event blocks */
