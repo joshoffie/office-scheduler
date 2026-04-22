@@ -404,6 +404,125 @@ function setupEventDrag(container, eventSelector, scrollParent) {
   });
 }
 
+// ===== DRAG-TO-CREATE NEW BLOCKS =====
+function setupDragCreate(evCol, scrollParent) {
+  let dragging = false, preview = null, startMin = 0, endMin = 0;
+
+  evCol.addEventListener('mousedown', e => {
+    if (e.button !== 0 || e.target.closest('.event-block') || e.target.closest('.quick-add-block')) return;
+    e.preventDefault();
+    dragging = true;
+    const y = e.clientY - evCol.getBoundingClientRect().top + scrollParent.scrollTop;
+    startMin = Math.round(y / 15) * 15;
+    endMin = startMin + 15;
+
+    // Create preview element
+    preview = document.createElement('div');
+    preview.className = 'drag-create-preview';
+    preview.style.top = startMin + 'px';
+    preview.style.height = '15px';
+    preview.textContent = formatTimeDisplay(minutesToTime(startMin));
+    evCol.appendChild(preview);
+
+    function onMove(e2) {
+      const y2 = e2.clientY - evCol.getBoundingClientRect().top + scrollParent.scrollTop;
+      endMin = Math.round(y2 / 15) * 15;
+      // Allow dragging up or down
+      const top = Math.min(startMin, endMin);
+      const bot = Math.max(startMin, endMin);
+      const h = Math.max(bot - top, 15);
+      preview.style.top = top + 'px';
+      preview.style.height = h + 'px';
+      preview.textContent = `${formatTimeDisplay(minutesToTime(top))} – ${formatTimeDisplay(minutesToTime(top + h))}`;
+    }
+
+    function onUp() {
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+
+      if (preview) preview.remove();
+
+      const top = Math.min(startMin, endMin);
+      const bot = Math.max(startMin, endMin);
+      const finalStart = Math.max(0, top);
+      const finalEnd = Math.max(finalStart + 15, bot);
+
+      // Show quick-add input right on the block
+      showQuickAdd(evCol, scrollParent, finalStart, finalEnd);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Single click (no drag) also creates a quick-add at that time
+  evCol.addEventListener('click', e => {
+    if (e.target.closest('.event-block') || e.target.closest('.quick-add-block')) return;
+    // Only fire if not from a drag (drag already handled in mouseup)
+  });
+}
+
+function showQuickAdd(evCol, scrollParent, startMins, endMins) {
+  // Remove any existing quick-add
+  evCol.querySelectorAll('.quick-add-block').forEach(el => el.remove());
+
+  const block = document.createElement('div');
+  block.className = 'quick-add-block';
+  block.style.top = startMins + 'px';
+  block.style.height = Math.max(endMins - startMins, 30) + 'px';
+
+  const timeLabel = document.createElement('div');
+  timeLabel.className = 'quick-add-time';
+  timeLabel.textContent = `${formatTimeDisplay(minutesToTime(startMins))} – ${formatTimeDisplay(minutesToTime(endMins))}`;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Title, then Enter';
+  input.autocomplete = 'off';
+
+  block.appendChild(timeLabel);
+  block.appendChild(input);
+  evCol.appendChild(block);
+  input.focus();
+
+  // Also update the side panel times
+  bookingDate = dateStr(selectedDate);
+  if (inlineStartInput) inlineStartInput.setMins(startMins);
+  if (inlineEndInput) inlineEndInput.setMins(endMins);
+
+  async function save() {
+    const title = input.value.trim();
+    if (!title) { block.remove(); return; }
+
+    if (!data.knownNames) data.knownNames = [];
+    if (!data.knownNames.includes(title)) data.knownNames.push(title);
+
+    const color = $('inline-booking-color')?.value || '#3B82F6';
+    data.bookings.push({
+      id: genId(), roomId: currentRoomId, title, details: '',
+      date: bookingDate || dateStr(selectedDate),
+      startTime: minutesToTime(startMins), endTime: minutesToTime(endMins),
+      color, createdAt: new Date().toISOString()
+    });
+
+    block.remove();
+    renderRoom();
+    toast('Booking saved');
+    try { await store.save(data); } catch (err) { toast('Error saving'); console.error(err); }
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { block.remove(); }
+  });
+
+  input.addEventListener('blur', () => {
+    // Small delay so click events can fire first
+    setTimeout(() => { if (block.parentNode) block.remove(); }, 200);
+  });
+}
+
 // ===== DAY VIEW (split layout: calendar left, booking form right) =====
 function renderDayView() {
   const container=$('day-split-calendar'), today=new Date();
@@ -446,18 +565,9 @@ function renderDayView() {
   // Drag event blocks to reschedule
   setupEventDrag(container, '.event-block', container);
 
-  // Click on empty space to set time in inline booking panel
+  // Drag on empty space to create a new block
   const evCol=container.querySelector('.events-column');
-  if(evCol) evCol.addEventListener('click',e=>{
-    if(e.target.closest('.event-block'))return;
-    const y=e.clientY-evCol.getBoundingClientRect().top+container.scrollTop;
-    const mins=Math.round(y/15)*15;
-    bookingDate=dateStr(selectedDate);
-    // Set inline panel times
-    if(inlineStartInput) inlineStartInput.setMins(mins);
-    if(inlineEndInput) inlineEndInput.setMins(mins+60);
-    $('inline-booking-title').focus();
-  });
+  if(evCol) setupDragCreate(evCol, container);
 
   // Reset inline panel for this date
   bookingDate=dateStr(selectedDate);
