@@ -171,7 +171,7 @@ function renderGrid() {
       if(cur) cls+=' current';
       else if(fut) cls+=' future';
       // past blocks still render (default blue), just slightly faded
-      mini+=`<div class="${cls}" style="left:${l}%;width:${w}%${past?' opacity:0.4':''}"></div>`;}
+      mini+=`<div class="${cls}" style="left:${l}%;width:${w}%${past?';opacity:0.4':''}"></div>`;}
     // Add now-line to mini timeline
     mini += `<div class="mini-now-line" style="left:${nowPct}%"></div>`;
     return `<div class="room-card ${occ?'occupied':'available'}" data-room-id="${room.id}">

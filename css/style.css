@@ -213,17 +213,17 @@ textarea { resize: vertical; }
 /* Mini timeline in room card */
 .mini-timeline {
   height: 32px; margin: 2px 14px 12px;
-  background: rgba(255,255,255,0.7); border-radius: 4px;
+  background: #FFFFFF; border-radius: 4px;
   position: relative; overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.08);
 }
 .mini-block {
   position: absolute; top: 2px; bottom: 2px;
   background: var(--blue-300); border-radius: 3px;
   opacity: 0.7;
 }
-.mini-block.future { background: var(--blue-400); opacity: 0.85; }
-.mini-block.current { background: var(--red-400); opacity: 1; }
+.mini-block.future { background: var(--blue-500); opacity: 0.9; }
+.mini-block.current { background: var(--blue-600); opacity: 1; box-shadow: 0 0 0 1px var(--blue-700); }
 
 /* ===== DAY SPLIT LAYOUT ===== */
 .day-split-layout {
