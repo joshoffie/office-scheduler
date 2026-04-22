@@ -193,7 +193,18 @@
       "order": 29
     }
   ],
-  "bookings": [],
+  "bookings": [
+    {
+      "id": "id-moa6e4n7-glf5dw",
+      "roomId": "room-1",
+      "title": "Carla",
+      "details": "needs office emergency",
+      "date": "2026-04-22",
+      "startTime": "17:00",
+      "endTime": "19:00",
+      "createdAt": "2026-04-22T14:56:24.835Z"
+    }
+  ],
   "recurringRules": [
     {
       "id": "id-moa6ctc1-utzk9l",
