@@ -4,6 +4,11 @@
       "id": "floor-1",
       "name": "Floor 1",
       "order": 0
+    },
+    {
+      "id": "id-moa6c14o-581oiu",
+      "name": "Floor 2",
+      "order": 1
     }
   ],
   "rooms": [
