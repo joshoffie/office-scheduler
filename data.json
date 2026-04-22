@@ -194,6 +194,21 @@
     }
   ],
   "bookings": [],
-  "recurringRules": [],
+  "recurringRules": [
+    {
+      "id": "id-moa6ctc1-utzk9l",
+      "roomId": "room-1",
+      "doctorName": "Dr Jane",
+      "daysOfWeek": [
+        0,
+        1,
+        2
+      ],
+      "startTime": "09:00",
+      "endTime": "17:00",
+      "exceptions": [],
+      "createdAt": "2026-04-22T14:55:23.521Z"
+    }
+  ],
   "pin": "1999"
 }
