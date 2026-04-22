@@ -651,7 +651,7 @@ function renderMonthView() {
 }
 
 // ===== TIME INPUT (split hour / minute / ampm) =====
-function initTimeInput(containerId, hiddenId) {
+function initTimeInput(containerId, hiddenId, onChange) {
   const container = $(containerId), hidden = $(hiddenId);
   const parts = container.querySelectorAll('.time-part');
   const hourEl = container.querySelector('[data-part="hour"]');
@@ -666,6 +666,7 @@ function initTimeInput(containerId, hiddenId) {
     if (m >= 1440) m = 1425;
     hidden.value = minutesToTime(m);
     syncDisplay();
+    if (onChange) onChange();
   }
 
   function syncDisplay() {
@@ -865,6 +866,45 @@ function setupInlineAutocomplete() {
   input.addEventListener('blur', () => { setTimeout(() => { dropdown.style.display = 'none'; }, 200); });
 }
 
+// ===== OVERLAP CHECK =====
+function checkOverlap(roomId, date, startTime, endTime, excludeId) {
+  const bks = getBookingsForRoomDate(roomId, typeof date === 'string' ? parseDateStr(date) : date);
+  const sm = timeToMinutes(startTime), em = timeToMinutes(endTime);
+  const conflicts = [];
+  for (const b of bks) {
+    if (excludeId && (b.id === excludeId)) continue;
+    const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
+    if (sm < be && em > bs) conflicts.push(b);
+  }
+  return conflicts;
+}
+
+function overlapWarningHTML(conflicts) {
+  if (!conflicts.length) return '';
+  const names = conflicts.map(c => `"${c.title}" (${formatTimeDisplay(c.startTime)}–${formatTimeDisplay(c.endTime)})`).join(', ');
+  return `<div class="overlap-warning">⚠ Overlaps with ${names}</div>`;
+}
+
+function updateOverlapWarning(containerId, roomId, date, startTime, endTime, excludeId) {
+  const el = $(containerId);
+  if (!el) return;
+  const conflicts = checkOverlap(roomId, date, startTime, endTime, excludeId);
+  el.innerHTML = overlapWarningHTML(conflicts);
+}
+
+function checkInlineOverlap() {
+  const st=$('inline-booking-start')?.value, et=$('inline-booking-end')?.value;
+  if(!st||!et||!currentRoomId) return;
+  const d=bookingDate||dateStr(selectedDate);
+  updateOverlapWarning('inline-overlap-warning',currentRoomId,d,st,et,editingBookingId);
+}
+function checkModalOverlap() {
+  const st=$('booking-start')?.value, et=$('booking-end')?.value;
+  if(!st||!et||!currentRoomId) return;
+  const d=bookingDate||dateStr(selectedDate);
+  updateOverlapWarning('modal-overlap-warning',currentRoomId,d,st,et,null);
+}
+
 // ===== BOOKING MODAL =====
 // ===== INLINE BOOKING PANEL (day view) =====
 function editBookingInPanel(booking) {
@@ -900,7 +940,10 @@ function editBookingInPanel(booking) {
   // Change header and button to "Edit/Update"
   $('inline-panel-title').textContent = 'Edit Booking';
   $('inline-save-btn').textContent = 'Update Booking';
+  $('inline-delete-btn').style.display = '';
+  $('inline-delete-btn').onclick = () => showDeleteModal(booking);
   $('inline-booking-title').focus();
+  checkInlineOverlap();
 }
 
 function resetInlinePanel() {
@@ -920,6 +963,9 @@ function resetInlinePanel() {
   editingBookingId = null;
   $('inline-panel-title').textContent = 'New Booking';
   $('inline-save-btn').textContent = 'Save Booking';
+  $('inline-delete-btn').style.display = 'none';
+  $('inline-delete-btn').onclick = null;
+  const ow=$('inline-overlap-warning'); if(ow) ow.innerHTML='';
 }
 
 async function saveInlineBooking() {
@@ -972,8 +1018,9 @@ function openBookingModal(startMinutes) {
   $('booking-color').value='#3B82F6';
   $('modal-color-picker')?.querySelectorAll('.color-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.color==='#3B82F6'));
   show('booking-modal'); $('booking-title').focus();
+  checkModalOverlap();
 }
-function closeBookingModal() { hide('booking-modal'); bookingDate=null; }
+function closeBookingModal() { hide('booking-modal'); bookingDate=null; const ow=$('modal-overlap-warning'); if(ow) ow.innerHTML=''; }
 
 async function saveBooking() {
   const title=$('booking-title').value.trim(), details=$('booking-details').value.trim();
@@ -1098,11 +1145,11 @@ async function init() {
 // ===== EVENTS =====
 document.addEventListener('DOMContentLoaded',()=>{
   // Init time inputs (modal)
-  startInput=initTimeInput('start-time-input','booking-start');
-  endInput=initTimeInput('end-time-input','booking-end');
+  startInput=initTimeInput('start-time-input','booking-start',checkModalOverlap);
+  endInput=initTimeInput('end-time-input','booking-end',checkModalOverlap);
   // Init inline time inputs (day split panel)
-  inlineStartInput=initTimeInput('inline-start-time-input','inline-booking-start');
-  inlineEndInput=initTimeInput('inline-end-time-input','inline-booking-end');
+  inlineStartInput=initTimeInput('inline-start-time-input','inline-booking-start',checkInlineOverlap);
+  inlineEndInput=initTimeInput('inline-end-time-input','inline-booking-end',checkInlineOverlap);
   // Init color pickers
   initColorPicker('modal-color-picker','booking-color');
   initColorPicker('inline-color-picker','inline-booking-color');

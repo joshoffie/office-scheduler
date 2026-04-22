@@ -681,6 +681,14 @@ textarea { resize: vertical; }
 }
 .toast.show { opacity: 1; }
 
+/* ===== OVERLAP WARNING ===== */
+.overlap-warning {
+  background: var(--amber-100, #FEF3C7); color: #92400E;
+  border: 1px solid #F59E0B; border-radius: var(--radius);
+  padding: 8px 12px; font-size: 13px; font-weight: 500;
+  margin: 8px 0;
+}
+
 /* ===== ANIMATIONS ===== */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .icon-btn svg { pointer-events: none; }

@@ -122,7 +122,10 @@
       <div class="day-split-layout" id="day-split-layout" style="display:none;">
         <div class="day-split-calendar" id="day-split-calendar"></div>
         <div class="day-split-panel" id="day-split-panel">
-          <h3 id="inline-panel-title">New Booking</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <h3 id="inline-panel-title">New Booking</h3>
+            <button class="btn btn-danger btn-sm" id="inline-delete-btn" style="display:none;">Delete</button>
+          </div>
           <div class="form-group" style="position:relative;">
             <label>Title</label>
             <input type="text" id="inline-booking-title" placeholder="e.g., Dr. Smith" autocomplete="off">
@@ -182,6 +185,7 @@
               </div>
             </div>
           </div>
+          <div id="inline-overlap-warning"></div>
           <button class="btn btn-primary btn-lg" id="inline-save-btn">Save Booking</button>
         </div>
       </div>
@@ -257,6 +261,7 @@
             </div>
           </div>
         </div>
+        <div id="modal-overlap-warning"></div>
         <div class="modal-footer">
           <button class="btn" id="modal-cancel-btn">Cancel</button>
           <button class="btn btn-primary" id="modal-save-btn">Save Booking</button>
