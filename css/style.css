@@ -225,6 +225,33 @@ textarea { resize: vertical; }
 .mini-block.future { background: var(--blue-400); opacity: 0.85; }
 .mini-block.current { background: var(--red-400); opacity: 1; }
 
+/* ===== DAY SPLIT LAYOUT ===== */
+.day-split-layout {
+  display: flex; height: calc(100vh - 61px);
+}
+.day-split-calendar {
+  flex: 1; overflow-y: auto; position: relative;
+  border-right: 1px solid var(--gray-200);
+}
+.day-split-panel {
+  width: 340px; flex-shrink: 0; overflow-y: auto;
+  background: white; padding: 20px;
+  display: flex; flex-direction: column;
+}
+.day-split-panel h3 {
+  font-size: 16px; font-weight: 700; margin-bottom: 16px;
+  color: var(--gray-800);
+}
+.day-split-panel .form-group { margin-bottom: 12px; }
+.day-split-panel .form-row { margin-bottom: 0; }
+.day-split-panel .btn-primary.btn-lg { margin-top: auto; }
+
+@media (max-width: 768px) {
+  .day-split-layout { flex-direction: column; }
+  .day-split-calendar { flex: 1; border-right: none; border-bottom: 1px solid var(--gray-200); }
+  .day-split-panel { width: 100%; height: 50%; }
+}
+
 /* ===== WEEK VIEW ===== */
 .calendar-container {
   height: calc(100vh - 61px); overflow-y: auto;
@@ -384,16 +411,11 @@ textarea { resize: vertical; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Now line */
+/* Now line (no dot) */
 .now-line {
   position: absolute; left: 0; right: 0; height: 2px;
   background: var(--red-500); z-index: 10;
   pointer-events: none;
-}
-.now-dot {
-  position: absolute; left: -5px; top: -4px;
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--red-500);
 }
 
 /* ===== MODALS ===== */
@@ -512,16 +534,11 @@ textarea { resize: vertical; }
 }
 .recurring-btn svg { flex-shrink: 0; }
 
-/* Mini timeline now-line */
+/* Mini timeline now-line (no dot) */
 .mini-now-line {
   position: absolute; top: 0; bottom: 0; width: 2px;
   background: var(--red-500); z-index: 5;
   pointer-events: none;
-}
-.mini-now-line::after {
-  content: ''; position: absolute; top: 50%; left: -2px;
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--red-500); transform: translateY(-50%);
 }
 
 /* Autocomplete */

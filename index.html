@@ -118,6 +118,69 @@
           <button class="btn btn-primary" id="add-booking-btn">+ Add Booking</button>
         </div>
       </header>
+      <!-- Day view: split layout (calendar left, booking form right) -->
+      <div class="day-split-layout" id="day-split-layout" style="display:none;">
+        <div class="day-split-calendar" id="day-split-calendar"></div>
+        <div class="day-split-panel" id="day-split-panel">
+          <h3>New Booking</h3>
+          <div class="form-group" style="position:relative;">
+            <label>Title</label>
+            <input type="text" id="inline-booking-title" placeholder="e.g., Dr. Smith" autocomplete="off">
+            <div id="inline-autocomplete-dropdown" class="autocomplete-dropdown" style="display:none;"></div>
+          </div>
+          <div class="form-group">
+            <label>Details</label>
+            <textarea id="inline-booking-details" placeholder="Additional notes (optional)" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Start Time</label>
+              <div class="time-input" id="inline-start-time-input">
+                <div class="time-part" data-part="hour" id="inline-start-hour">8</div>
+                <div class="time-sep">:</div>
+                <div class="time-part" data-part="minute" id="inline-start-min">00</div>
+                <div class="time-part time-ampm" data-part="ampm" id="inline-start-ampm">AM</div>
+                <input type="hidden" id="inline-booking-start" value="08:00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>End Time</label>
+              <div class="time-input" id="inline-end-time-input">
+                <div class="time-part" data-part="hour" id="inline-end-hour">9</div>
+                <div class="time-sep">:</div>
+                <div class="time-part" data-part="minute" id="inline-end-min">00</div>
+                <div class="time-part time-ampm" data-part="ampm" id="inline-end-ampm">AM</div>
+                <input type="hidden" id="inline-booking-end" value="09:00">
+              </div>
+            </div>
+          </div>
+          <button type="button" class="recurring-btn" id="inline-recurring-btn">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+            Permanent / Recurring Office
+          </button>
+          <input type="checkbox" id="inline-booking-recurring" class="toggle-input" style="display:none;">
+          <div id="inline-recurring-options" style="display:none;">
+            <div class="form-group">
+              <label>Doctor Name</label>
+              <input type="text" id="inline-recurring-doctor" placeholder="e.g., Dr. Jane Smith">
+            </div>
+            <div class="form-group">
+              <label>Days of Week</label>
+              <div class="day-picker" id="inline-day-picker">
+                <button class="day-btn" data-day="0">Sun</button>
+                <button class="day-btn" data-day="1">Mon</button>
+                <button class="day-btn" data-day="2">Tue</button>
+                <button class="day-btn" data-day="3">Wed</button>
+                <button class="day-btn" data-day="4">Thu</button>
+                <button class="day-btn" data-day="5">Fri</button>
+                <button class="day-btn" data-day="6">Sat</button>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-lg" id="inline-save-btn">Save Booking</button>
+        </div>
+      </div>
+      <!-- Week/Month view: full-screen calendar -->
       <div class="calendar-container" id="calendar-container"></div>
     </div>
 

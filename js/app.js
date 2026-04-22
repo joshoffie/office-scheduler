@@ -164,8 +164,14 @@ function renderGrid() {
   grid.innerHTML=rooms.map(room=>{
     const occ=getCurrentOccupant(room.id), bks=getBookingsForRoomDate(room.id,now);
     let mini='';
+    // Always render ALL blocks so nurse can see schedule at a glance
     for(const b of bks){const s=timeToMinutes(b.startTime),e=timeToMinutes(b.endTime),l=(s/1440)*100,w=((e-s)/1440)*100;
-      const cur=s<=nm&&e>nm,fut=s>nm; mini+=`<div class="mini-block${cur?' current':fut?' future':''}" style="left:${l}%;width:${w}%"></div>`;}
+      const cur=s<=nm&&e>nm,fut=s>nm,past=e<=nm;
+      let cls='mini-block';
+      if(cur) cls+=' current';
+      else if(fut) cls+=' future';
+      // past blocks still render (default blue), just slightly faded
+      mini+=`<div class="${cls}" style="left:${l}%;width:${w}%${past?' opacity:0.4':''}"></div>`;}
     // Add now-line to mini timeline
     mini += `<div class="mini-now-line" style="left:${nowPct}%"></div>`;
     return `<div class="room-card ${occ?'occupied':'available'}" data-room-id="${room.id}">
@@ -193,14 +199,93 @@ function renderRoom() {
   const room=data.rooms.find(r=>r.id===currentRoomId); if(!room) return;
   $('room-title').textContent=room.name;
   document.querySelectorAll('.view-toggle-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===roomViewMode));
-  if(roomViewMode==='day') renderDayView();
-  else if(roomViewMode==='week') renderWeekView();
-  else renderMonthView();
+
+  // Day view uses split layout; week/month use full-screen calendar-container
+  if(roomViewMode==='day'){
+    show('day-split-layout'); hide('calendar-container');
+    // Hide the +Add Booking button in header (it's inline now)
+    $('add-booking-btn').style.display='none';
+    renderDayView();
+  } else {
+    hide('day-split-layout'); show('calendar-container');
+    $('add-booking-btn').style.display='';
+    if(roomViewMode==='week') renderWeekView();
+    else renderMonthView();
+  }
 }
 
-// ===== DAY VIEW =====
+// ===== DRAG-TO-MOVE EVENT BLOCKS =====
+function setupEventDrag(container, eventSelector, scrollParent) {
+  container.querySelectorAll(eventSelector).forEach(el => {
+    let startY = 0, origTop = 0, dragging = false, moved = false;
+    el.style.cursor = 'grab';
+
+    el.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const booking = JSON.parse(el.dataset.booking);
+      // Don't allow dragging recurring instances (they're rule-based)
+      if (booking.isRecurring) return;
+      e.preventDefault(); e.stopPropagation();
+      dragging = true; moved = false;
+      startY = e.clientY;
+      origTop = parseInt(el.style.top, 10);
+      el.style.cursor = 'grabbing';
+      el.style.opacity = '0.8';
+      el.style.zIndex = '20';
+
+      function onMove(e2) {
+        const dy = e2.clientY - startY;
+        if (Math.abs(dy) > 3) moved = true;
+        const newTop = Math.max(0, Math.round((origTop + dy) / 15) * 15);
+        el.style.top = newTop + 'px';
+      }
+
+      async function onUp() {
+        dragging = false;
+        el.style.cursor = 'grab';
+        el.style.opacity = '';
+        el.style.zIndex = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+
+        if (!moved) return; // was a click, not a drag
+
+        const newTop = parseInt(el.style.top, 10);
+        const delta = newTop - origTop; // minutes shifted
+        if (delta === 0) return;
+
+        const booking = JSON.parse(el.dataset.booking);
+        const oldStart = timeToMinutes(booking.startTime);
+        const oldEnd = timeToMinutes(booking.endTime);
+        const duration = oldEnd - oldStart;
+        const newStart = Math.max(0, Math.min(1440 - duration, newTop));
+        const newEnd = newStart + duration;
+
+        // Find and update the actual booking in data
+        const b = data.bookings.find(x => x.id === booking.id);
+        if (b) {
+          b.startTime = minutesToTime(newStart);
+          b.endTime = minutesToTime(newEnd);
+          renderRoom();
+          toast(`Moved to ${formatTimeDisplay(b.startTime)}`);
+          try { await store.save(data); } catch (err) { toast('Error saving'); console.error(err); }
+        }
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Prevent click (delete modal) if we dragged
+    el.addEventListener('click', e => {
+      if (moved) { e.stopPropagation(); moved = false; }
+    }, true);
+  });
+}
+
+// ===== DAY VIEW (split layout: calendar left, booking form right) =====
 function renderDayView() {
-  const container=$('calendar-container'), today=new Date();
+  const container=$('day-split-calendar'), today=new Date();
   $('room-date-display').textContent=formatDateFull(selectedDate);
 
   let timeHTML='';
@@ -209,9 +294,9 @@ function renderDayView() {
   let hourLines='';
   for(let h=0;h<24;h++) hourLines+=`<div class="hour-line" style="top:${h*60}px"></div>`;
 
-  // Now line
+  // Now line (no dot)
   let nowLineHTML='';
-  if(sameDay(selectedDate,today)){const nm=today.getHours()*60+today.getMinutes(); nowLineHTML=`<div class="now-line" style="top:${nm}px"><div class="now-dot"></div></div>`;}
+  if(sameDay(selectedDate,today)){const nm=today.getHours()*60+today.getMinutes(); nowLineHTML=`<div class="now-line" style="top:${nm}px"></div>`;}
 
   const bookings=getBookingsForRoomDate(currentRoomId,selectedDate);
   let evHTML='';
@@ -229,10 +314,28 @@ function renderDayView() {
   // Scroll
   if(sameDay(selectedDate,today)) container.scrollTop=Math.max(0,today.getHours()*60-60); else container.scrollTop=7*60;
 
-  // Click events
+  // Click event blocks to delete (only if not dragged)
   container.querySelectorAll('.event-block').forEach(el=>{el.addEventListener('click',e=>{e.stopPropagation();showDeleteModal(JSON.parse(el.dataset.booking));});});
+
+  // Drag event blocks to reschedule
+  setupEventDrag(container, '.event-block', container);
+
+  // Click on empty space to set time in inline booking panel
   const evCol=container.querySelector('.events-column');
-  if(evCol) evCol.addEventListener('dblclick',e=>{if(e.target.closest('.event-block'))return;const y=e.clientY-evCol.getBoundingClientRect().top+container.scrollTop;bookingDate=dateStr(selectedDate);openBookingModal(Math.round(y/15)*15);});
+  if(evCol) evCol.addEventListener('click',e=>{
+    if(e.target.closest('.event-block'))return;
+    const y=e.clientY-evCol.getBoundingClientRect().top+container.scrollTop;
+    const mins=Math.round(y/15)*15;
+    bookingDate=dateStr(selectedDate);
+    // Set inline panel times
+    if(inlineStartInput) inlineStartInput.setMins(mins);
+    if(inlineEndInput) inlineEndInput.setMins(mins+60);
+    $('inline-booking-title').focus();
+  });
+
+  // Reset inline panel for this date
+  bookingDate=dateStr(selectedDate);
+  resetInlinePanel();
 }
 
 // ===== WEEK VIEW =====
@@ -253,7 +356,7 @@ function renderWeekView() {
     const d=addDays(ws,i),ds=dateStr(d),bks=getBookingsForRoomDate(currentRoomId,d);
     let lines=''; for(let h=0;h<24;h++) lines+=`<div class="week-hour-line" style="top:${h*60}px"></div>`;
     // Now line in week
-    let nl=''; if(sameDay(d,today)){const nm=today.getHours()*60+today.getMinutes(); nl=`<div class="now-line" style="top:${nm}px"><div class="now-dot"></div></div>`;}
+    let nl=''; if(sameDay(d,today)){const nm=today.getHours()*60+today.getMinutes(); nl=`<div class="now-line" style="top:${nm}px"></div>`;}
     let ev=''; for(const b of bks){const sm=timeToMinutes(b.startTime),em=timeToMinutes(b.endTime),h=Math.max(em-sm,15);
       ev+=`<div class="week-event${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'><div class="week-event-title">${b.title}</div>${h>=30?`<div class="week-event-time">${formatTimeDisplay(b.startTime)}</div>`:''}</div>`;}
     cols+=`<div class="week-day-col" data-date="${ds}">${lines}${nl}${ev}</div>`;
@@ -263,6 +366,9 @@ function renderWeekView() {
   const body=$('week-body'); if(body){if(sameDay(selectedDate,today))body.scrollTop=Math.max(0,today.getHours()*60-60);else body.scrollTop=7*60;}
   container.querySelectorAll('.week-event').forEach(el=>{el.addEventListener('click',e=>{e.stopPropagation();showDeleteModal(JSON.parse(el.dataset.booking));});});
   container.querySelectorAll('.week-day-col').forEach(col=>{col.addEventListener('dblclick',e=>{if(e.target.closest('.week-event'))return;const y=e.clientY-col.getBoundingClientRect().top+col.parentElement.scrollTop;bookingDate=col.dataset.date;openBookingModal(Math.round(y/15)*15);});});
+
+  // Drag event blocks to reschedule in week view
+  setupEventDrag(container, '.week-event', $('week-body'));
 }
 
 // ===== MONTH VIEW =====
@@ -428,6 +534,7 @@ function initTimeInput(containerId, hiddenId) {
 }
 
 let startInput, endInput;
+let inlineStartInput, inlineEndInput;
 
 // ===== AUTOCOMPLETE =====
 function getKnownNames() {
@@ -475,7 +582,70 @@ function setupAutocomplete() {
   input.addEventListener('blur', () => { setTimeout(() => { dropdown.style.display = 'none'; }, 200); });
 }
 
+function setupInlineAutocomplete() {
+  const input = $('inline-booking-title'), dropdown = $('inline-autocomplete-dropdown');
+  let items = [], idx = -1;
+  function render(matches) {
+    if (!matches.length) { dropdown.style.display = 'none'; idx = -1; return; }
+    items = matches;
+    dropdown.innerHTML = matches.map((m, i) => `<div class="autocomplete-item${i===idx?' active':''}" data-idx="${i}">${m}</div>`).join('') + '<div class="autocomplete-hint">Tab to select</div>';
+    dropdown.style.display = '';
+  }
+  input.addEventListener('input', () => {
+    const val = input.value.trim().toLowerCase();
+    if (!val) { dropdown.style.display = 'none'; return; }
+    const matches = getKnownNames().filter(n => n.toLowerCase().includes(val));
+    idx = matches.length > 0 ? 0 : -1; render(matches);
+  });
+  input.addEventListener('keydown', e => {
+    if (dropdown.style.display === 'none' || !items.length) return;
+    if (e.key === 'Tab' || e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); input.value = items[idx]; dropdown.style.display = 'none'; } }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); render(items); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); render(items); }
+    else if (e.key === 'Escape') { dropdown.style.display = 'none'; }
+  });
+  dropdown.addEventListener('click', e => { const item = e.target.closest('.autocomplete-item'); if (item) { input.value = items[Number(item.dataset.idx)]; dropdown.style.display = 'none'; input.focus(); } });
+  input.addEventListener('blur', () => { setTimeout(() => { dropdown.style.display = 'none'; }, 200); });
+}
+
 // ===== BOOKING MODAL =====
+// ===== INLINE BOOKING PANEL (day view) =====
+function resetInlinePanel() {
+  $('inline-booking-title').value='';
+  $('inline-booking-details').value='';
+  const now=new Date();
+  const mins=Math.ceil((now.getHours()*60+now.getMinutes())/15)*15;
+  if(inlineStartInput) inlineStartInput.setMins(mins);
+  if(inlineEndInput) inlineEndInput.setMins(mins+60);
+  $('inline-booking-recurring').checked=false;
+  $('inline-recurring-btn').classList.remove('active');
+  hide('inline-recurring-options');
+  $('inline-day-picker')?.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('selected'));
+}
+
+async function saveInlineBooking() {
+  const title=$('inline-booking-title').value.trim(), details=$('inline-booking-details').value.trim();
+  const startTime=$('inline-booking-start').value, endTime=$('inline-booking-end').value;
+  const isRecurring=$('inline-booking-recurring').checked;
+  if(!title){toast('Please enter a title');return;}
+  if(timeToMinutes(endTime)<=timeToMinutes(startTime)){toast('End time must be after start time');return;}
+
+  if(!data.knownNames) data.knownNames=[];
+  if(!data.knownNames.includes(title)) data.knownNames.push(title);
+
+  if(isRecurring){
+    const doc=$('inline-recurring-doctor').value.trim();
+    const days=[...$('inline-day-picker').querySelectorAll('.day-btn.selected')].map(b=>Number(b.dataset.day));
+    if(!doc){toast('Enter doctor name');return;} if(!days.length){toast('Select days');return;}
+    if(!data.knownNames.includes(doc)) data.knownNames.push(doc);
+    data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
+  } else {
+    data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,createdAt:new Date().toISOString()});
+  }
+  resetInlinePanel(); renderRoom(); toast('Booking saved');
+  try{await store.save(data);}catch(e){toast('Error saving');console.error(e);}
+}
+
 function openBookingModal(startMinutes) {
   $('modal-title').textContent='New Booking';
   $('booking-title').value=''; $('booking-details').value='';
@@ -595,10 +765,25 @@ async function init() {
 
 // ===== EVENTS =====
 document.addEventListener('DOMContentLoaded',()=>{
-  // Init time inputs (new split hour/min/ampm)
+  // Init time inputs (modal)
   startInput=initTimeInput('start-time-input','booking-start');
   endInput=initTimeInput('end-time-input','booking-end');
+  // Init inline time inputs (day split panel)
+  inlineStartInput=initTimeInput('inline-start-time-input','inline-booking-start');
+  inlineEndInput=initTimeInput('inline-end-time-input','inline-booking-end');
   setupAutocomplete();
+  setupInlineAutocomplete();
+
+  // Inline panel events
+  $('inline-save-btn').addEventListener('click',saveInlineBooking);
+  $('inline-recurring-btn').addEventListener('click',()=>{
+    const cb=$('inline-booking-recurring'), btn=$('inline-recurring-btn');
+    cb.checked=!cb.checked; btn.classList.toggle('active',cb.checked);
+    if(cb.checked){show('inline-recurring-options');$('inline-booking-title').placeholder='Auto-filled from doctor name';}
+    else{hide('inline-recurring-options');$('inline-booking-title').placeholder='e.g., Dr. Smith';}
+  });
+  $('inline-recurring-doctor')?.addEventListener('input',()=>{if($('inline-booking-recurring').checked)$('inline-booking-title').value=$('inline-recurring-doctor').value;});
+  $('inline-day-picker')?.querySelectorAll('.day-btn').forEach(b=>{b.addEventListener('click',e=>{e.preventDefault();b.classList.toggle('selected');});});
 
   // Setup (token only, no PIN setup)
   $('setup-save-btn').addEventListener('click',async()=>{
@@ -617,7 +802,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('pin-input').addEventListener('keydown',e=>{if(e.key==='Enter')$('pin-submit-btn').click();});
 
   // Back
-  $('back-btn').addEventListener('click',()=>{currentRoomId=null;hide('room-view');showGrid();});
+  $('back-btn').addEventListener('click',()=>{currentRoomId=null;hide('room-view');hide('day-split-layout');showGrid();});
 
   // Nav arrows
   $('prev-btn').addEventListener('click',()=>{
@@ -658,15 +843,25 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // Enter key saves booking unless details textarea is focused
   document.addEventListener('keydown',e=>{
-    if(e.key==='Enter' && $('booking-modal').style.display!=='none'){
-      const active=document.activeElement;
-      // Don't trigger if typing in details textarea or autocomplete is showing
+    if(e.key!=='Enter') return;
+    const active=document.activeElement;
+    // Don't trigger if inside a time-part input
+    if(active && active.closest && active.closest('.time-part')) return;
+
+    // Modal booking form
+    if($('booking-modal').style.display!=='none'){
       if(active && active.id==='booking-details') return;
       if($('autocomplete-dropdown').style.display!=='none') return;
-      // Don't trigger if inside a time-part input
-      if(active && active.closest && active.closest('.time-part')) return;
-      e.preventDefault();
-      saveBooking();
+      e.preventDefault(); saveBooking(); return;
+    }
+    // Inline day-view booking panel
+    if($('day-split-layout').style.display!=='none'){
+      if(active && active.id==='inline-booking-details') return;
+      if($('inline-autocomplete-dropdown').style.display!=='none') return;
+      // Only trigger if focus is inside the panel
+      if(active && active.closest && active.closest('#day-split-panel')){
+        e.preventDefault(); saveInlineBooking(); return;
+      }
     }
   });
 
