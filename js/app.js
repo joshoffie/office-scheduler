@@ -276,7 +276,7 @@ function getBookingsForRoomDate(roomId, date) {
       if (!(r.exceptions||[]).includes(ds)) {
         results.push({ id:`${r.id}__${ds}`, ruleId:r.id, roomId:r.roomId, title:r.doctorName,
           details:`Recurring: ${r.daysOfWeek.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ')}`,
-          startTime:r.startTime, endTime:r.endTime, date:ds, isRecurring:true });
+          startTime:r.startTime, endTime:r.endTime, date:ds, color:r.color||null, isRecurring:true });
       }
     }
   }
@@ -557,7 +557,7 @@ function renderDayView() {
   for(const b of bookings){
     const sm=timeToMinutes(b.startTime),em=timeToMinutes(b.endTime),h=Math.max(em-sm,15);
     const color = b.color || (b.isRecurring ? '#16a34a' : '#3B82F6');
-    const colorStyle = b.isRecurring ? '' : `background:${hexToRgba(color,0.2)};border-left-color:${color};`;
+    const colorStyle = `background:${hexToRgba(color,0.2)};border-left-color:${color};`;
     evHTML+=`<div class="event-block${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px;${colorStyle}" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'>
       <div class="event-title">${b.title}</div>
       <div class="event-time">${formatTimeDisplay(b.startTime)} – ${formatTimeDisplay(b.endTime)}</div>
@@ -614,7 +614,7 @@ function renderWeekView() {
     // Now line in week
     let nl=''; if(sameDay(d,today)){const nm=today.getHours()*60+today.getMinutes(); nl=`<div class="now-line" style="top:${nm}px"></div>`;}
     let ev=''; for(const b of bks){const sm=timeToMinutes(b.startTime),em=timeToMinutes(b.endTime),h=Math.max(em-sm,15);
-      const wc=b.color||(b.isRecurring?'#16a34a':'#3B82F6');const wcs=b.isRecurring?'':`background:${hexToRgba(wc,0.2)};border-left-color:${wc};`;
+      const wc=b.color||(b.isRecurring?'#16a34a':'#3B82F6');const wcs=`background:${hexToRgba(wc,0.2)};border-left-color:${wc};`;
       ev+=`<div class="week-event${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px;${wcs}" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'><div class="week-event-title">${b.title}</div>${h>=30?`<div class="week-event-time">${formatTimeDisplay(b.startTime)}</div>`:''}</div>`;}
     cols+=`<div class="week-day-col" data-date="${ds}">${lines}${nl}${ev}</div>`;
   }
@@ -897,7 +897,8 @@ function editBookingInPanel(booking) {
   $('inline-recurring-btn').classList.remove('active');
   hide('inline-recurring-options');
 
-  // Change button to "Update"
+  // Change header and button to "Edit/Update"
+  $('inline-panel-title').textContent = 'Edit Booking';
   $('inline-save-btn').textContent = 'Update Booking';
   $('inline-booking-title').focus();
 }
@@ -917,6 +918,7 @@ function resetInlinePanel() {
   $('inline-booking-color').value='#3B82F6';
   $('inline-color-picker')?.querySelectorAll('.color-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.color==='#3B82F6'));
   editingBookingId = null;
+  $('inline-panel-title').textContent = 'New Booking';
   $('inline-save-btn').textContent = 'Save Booking';
 }
 
@@ -935,7 +937,8 @@ async function saveInlineBooking() {
     const days=[...$('inline-day-picker').querySelectorAll('.day-btn.selected')].map(b=>Number(b.dataset.day));
     if(!doc){toast('Enter doctor name');return;} if(!days.length){toast('Select days');return;}
     if(!data.knownNames.includes(doc)) data.knownNames.push(doc);
-    data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
+    const recurColor=$('inline-booking-color').value;
+    data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,color:recurColor,exceptions:[],createdAt:new Date().toISOString()});
   } else {
     const color=$('inline-booking-color').value;
     if (editingBookingId) {
@@ -987,7 +990,8 @@ async function saveBooking() {
     const doc=$('recurring-doctor').value.trim(), days=[...$('day-picker').querySelectorAll('.day-btn.selected')].map(b=>Number(b.dataset.day));
     if(!doc){toast('Enter doctor name');return;} if(!days.length){toast('Select days');return;}
     if(!data.knownNames.includes(doc)) data.knownNames.push(doc);
-    data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
+    const recurColor=$('booking-color').value;
+    data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,color:recurColor,exceptions:[],createdAt:new Date().toISOString()});
   } else {
     const color=$('booking-color').value;
     data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,color,createdAt:new Date().toISOString()});
