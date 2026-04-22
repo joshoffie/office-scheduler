@@ -29,6 +29,7 @@ class GitHubStore {
     return JSON.parse(atob(json.content.replace(/\n/g, '')));
   }
   async save(data) {
+    if (demoMode) return;
     if (this.saving) { this.pendingSave = data; return; }
     this.saving = true;
     try {
@@ -114,11 +115,28 @@ let roomViewMode = 'day'; // 'day', 'week', 'month'
 let deletingBooking = null, bookingDate = null, nowTimer = null;
 let settingsFloorId = null; // which floor is selected in settings for adding rooms
 let editingBookingId = null; // tracks which booking is being edited in inline panel
+let demoMode = false, originalData = null, tourStep = 0, tourSteps = [];
 
 // ===== UTILITY =====
 function $(id) { return document.getElementById(id); }
 function show(id) { $(id).style.display = ''; }
 function hide(id) { $(id).style.display = 'none'; }
+function transitionViews(outId, inId, onMid) {
+  const outEl = $(outId), inEl = $(inId);
+  outEl.classList.add('view-container','view-fade-out');
+  setTimeout(() => {
+    outEl.style.display = 'none';
+    outEl.classList.remove('view-fade-out','view-container');
+    if (onMid) onMid();
+    inEl.style.display = '';
+    inEl.classList.add('view-container','view-fade-in');
+    void inEl.offsetWidth;
+    inEl.classList.add('view-active');
+    setTimeout(() => {
+      inEl.classList.remove('view-container','view-fade-in','view-active');
+    }, 260);
+  }, 200);
+}
 function genId() { return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
 function dateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function formatDateShort(d) { const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${m[d.getMonth()]} ${d.getDate()}`; }
@@ -131,6 +149,20 @@ function getWeekStart(d) { const dt=new Date(d); dt.setDate(dt.getDate()-dt.getD
 function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt; }
 function sameDay(a,b) { return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
 function parseDateStr(s) { const p=s.split('-'); return new Date(p[0],p[1]-1,p[2]); }
+
+// ===== DEMO DATA =====
+const DEMO_DOCTORS = [
+  'Dr. Sarah Chen', 'Dr. Michael Rivera', 'Dr. Emily Watson', 'Dr. James Okafor',
+  'Dr. Lisa Patel', 'Dr. Robert Kim', 'Dr. Amanda Foster', 'Dr. David Nguyen',
+  'Dr. Rachel Torres', 'Dr. Kevin Murphy', 'Dr. Natalie Brooks', 'Dr. Andrew Shah',
+  'Dr. Jennifer Lee', 'Dr. Marcus Grant', 'Dr. Sofia Ramirez', 'Dr. Thomas Wright'
+];
+const DEMO_DETAILS = [
+  'Annual checkup', 'Follow-up visit', 'New patient consultation', 'Lab review',
+  'Physical therapy', 'Post-op check', 'Medication review', 'Urgent care',
+  'Wellness exam', 'Referral consult', 'Imaging review', 'Pre-surgical eval',
+  'Allergy testing', 'Vaccination', 'Blood work', 'Skin check'
+];
 
 // ===== COLOR PALETTE =====
 const COLORS = [
@@ -332,7 +364,7 @@ function renderFloorTabs() {
 // ===== ROOM VIEW =====
 function openRoom(roomId) {
   currentRoomId=roomId; selectedDate=new Date(); roomViewMode='day';
-  hide('grid-view'); show('room-view'); renderRoom();
+  transitionViews('grid-view', 'room-view', () => renderRoom());
 }
 
 function renderRoom() {
@@ -1114,6 +1146,7 @@ function startAutoSync(){
   if(autoSyncTimer)clearInterval(autoSyncTimer);
   autoSyncTimer=setInterval(async()=>{
     if(!store)return;
+    if(demoMode)return;
     try{
       data=await store.load();
       pruneOldData(data);
@@ -1130,6 +1163,325 @@ function startAutoSync(){
       }
     }catch(e){console.warn('Auto-sync failed:',e);}
   },30000);
+}
+
+// ===== DEMO WALKTHROUGH =====
+function generateDemoData() {
+  const demoData = JSON.parse(JSON.stringify(data));
+  const today = new Date();
+  const bookings = [];
+  const rules = [];
+
+  // Generate bookings for today, yesterday, and tomorrow
+  for (let dayOffset = -1; dayOffset <= 1; dayOffset++) {
+    const date = addDays(today, dayOffset);
+    const dateString = dateStr(date);
+    const bookingsPerRoomCount = dayOffset === 0 ? Math.floor(Math.random() * 4) + 2 : Math.floor(Math.random() * 2) + 1;
+
+    // Pick a subset of rooms for this date
+    const roomsToFill = demoData.rooms.slice(0, Math.max(3, Math.floor(demoData.rooms.length / 2)));
+
+    for (const room of roomsToFill) {
+      const numBookings = Math.max(1, bookingsPerRoomCount - Math.floor(Math.random() * 2));
+      for (let i = 0; i < numBookings; i++) {
+        const doctor = DEMO_DOCTORS[Math.floor(Math.random() * DEMO_DOCTORS.length)];
+        const detail = DEMO_DETAILS[Math.floor(Math.random() * DEMO_DETAILS.length)];
+        const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+        // Duration: 15, 30, 45, 60, 90, or 120 minutes
+        const durations = [15, 30, 45, 60, 90, 120];
+        const duration = durations[Math.floor(Math.random() * durations.length)];
+
+        // Start time between 7am-7pm (420-1140 minutes)
+        const startMin = Math.floor(Math.random() * (1140 - 420)) + 420;
+        // Ensure no overlap by checking existing bookings for this room/date
+        let finalStart = startMin;
+        while (bookings.some(b =>
+          b.roomId === room.id && b.date === dateString &&
+          timeToMinutes(b.startTime) < finalStart + duration && timeToMinutes(b.endTime) > finalStart
+        )) {
+          finalStart = Math.min(1320, finalStart + 30); // shift 30 min later, cap at 10pm
+        }
+
+        const endMin = finalStart + duration;
+        if (endMin <= 1440) {
+          bookings.push({
+            id: genId(),
+            roomId: room.id,
+            title: doctor,
+            details: detail,
+            date: dateString,
+            startTime: minutesToTime(finalStart),
+            endTime: minutesToTime(endMin),
+            color: color,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+    }
+  }
+
+  demoData.bookings = bookings;
+
+  // Create 3-5 recurring rules with different doctors on different days
+  const numRules = Math.floor(Math.random() * 3) + 3;
+  for (let i = 0; i < numRules; i++) {
+    const room = demoData.rooms[Math.floor(Math.random() * demoData.rooms.length)];
+    const doctor = DEMO_DOCTORS[Math.floor(Math.random() * DEMO_DOCTORS.length)];
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const daysOfWeek = [];
+    for (let d = 0; d < 7; d++) {
+      if (Math.random() > 0.5) daysOfWeek.push(d);
+    }
+    if (daysOfWeek.length === 0) daysOfWeek.push(Math.floor(Math.random() * 7));
+
+    const startMin = Math.floor(Math.random() * (1020 - 420)) + 420; // 7am-5pm
+    rules.push({
+      id: genId(),
+      roomId: room.id,
+      doctorName: doctor,
+      daysOfWeek: daysOfWeek,
+      startTime: minutesToTime(startMin),
+      endTime: minutesToTime(startMin + 60),
+      color: color,
+      exceptions: [],
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  demoData.recurringRules = rules;
+  return demoData;
+}
+
+function startDemo() {
+  // Save original data
+  originalData = JSON.parse(JSON.stringify(data));
+  demoMode = true;
+
+  // Generate and load demo data
+  data = generateDemoData();
+
+  // Close settings modal
+  closeSettings();
+
+  // Re-render
+  renderGrid();
+
+  // Show exit demo button
+  show('exit-demo-btn');
+
+  // Start the tour
+  startTour();
+}
+
+function exitDemo() {
+  // Restore original data
+  data = originalData;
+  demoMode = false;
+  originalData = null;
+
+  // Hide tour and exit button
+  hide('tour-overlay');
+  hide('exit-demo-btn');
+
+  // Re-render
+  if (currentRoomId) {
+    renderRoom();
+  } else {
+    renderGrid();
+  }
+
+  toast('Demo mode ended — your data is restored');
+}
+
+function startTour() {
+  tourStep = 0;
+
+  // Define tour steps
+  tourSteps = [
+    {
+      target: null,
+      text: '<h4>Welcome to Carla Scheduler!</h4>Let\'s walk through how everything works. You\'ll learn to schedule bookings, manage rooms, and stay organized.',
+      arrow: 'bottom'
+    },
+    {
+      target: 'room-grid',
+      text: '<h4>Room Overview</h4>This is your room grid. Each card shows a room\'s status — green is open, red is in use, dark green means someone\'s coming soon.',
+      arrow: 'top'
+    },
+    {
+      target: document.querySelector('.room-card'),
+      text: '<h4>Room Cards</h4>Each card displays a mini timeline of today\'s bookings. You can see at a glance who\'s in each room and when.',
+      arrow: 'top'
+    },
+    {
+      target: document.querySelector('.room-card'),
+      text: '<h4>Let\'s Explore a Room</h4>Click any room to see its full schedule and manage bookings in detail. Let\'s look at this one.',
+      arrow: 'top',
+      action: () => {
+        const firstRoom = data.rooms.find(r => r.floorId === currentFloorId);
+        if (firstRoom) openRoom(firstRoom.id);
+      }
+    },
+    {
+      target: 'day-split-calendar',
+      text: '<h4>Day View</h4>This is the day view. Bookings appear as colored blocks. The red line shows the current time.',
+      arrow: 'right'
+    },
+    {
+      target: 'day-split-panel',
+      text: '<h4>Booking Panel</h4>Use this panel on the right to create new bookings. Set a title, time, and pick any color.',
+      arrow: 'left'
+    },
+    {
+      target: 'day-events-col',
+      text: '<h4>Drag-to-Create</h4>You can click and drag on the calendar to quickly create a booking. Perfect for fast scheduling.',
+      arrow: 'right'
+    },
+    {
+      target: 'view-toggle',
+      text: '<h4>View Modes</h4>Switch between day, week, and month views here to see your schedule from different perspectives.',
+      arrow: 'bottom'
+    },
+    {
+      target: 'settings-btn',
+      text: '<h4>Settings</h4>Open settings to manage floors, rooms, and themes. Customize your workspace here.',
+      arrow: 'bottom'
+    },
+    {
+      target: null,
+      text: '<h4>Ready to Go!</h4>That\'s it! You\'re ready to start scheduling. Exit demo mode anytime from settings.',
+      arrow: 'top'
+    }
+  ];
+
+  showTourStep(0);
+  show('tour-overlay');
+}
+
+function showTourStep(index) {
+  if (index < 0 || index >= tourSteps.length) {
+    endTour();
+    return;
+  }
+
+  tourStep = index;
+  const step = tourSteps[index];
+
+  // Get target element
+  let targetEl = null;
+  if (step.target) {
+    if (typeof step.target === 'string') {
+      targetEl = $(step.target);
+    } else if (step.target instanceof HTMLElement) {
+      targetEl = step.target;
+    }
+  }
+
+  // Execute action if present
+  if (step.action) {
+    step.action();
+    // Wait for DOM/transitions to settle, then find target again
+    setTimeout(() => {
+      if (step.target && typeof step.target === 'string') {
+        targetEl = $(step.target);
+      }
+      positionTooltip(targetEl, step);
+    }, 550);
+  } else {
+    positionTooltip(targetEl, step);
+  }
+
+  // Update button text
+  const isLastStep = index === tourSteps.length - 1;
+  $('tour-next-btn').textContent = isLastStep ? 'Finish' : 'Next';
+
+  // Update step counter
+  $('tour-step-count').textContent = `${index + 1} of ${tourSteps.length}`;
+}
+
+function positionTooltip(targetEl, step) {
+  const overlay = $('tour-overlay');
+  const spotlight = $('tour-spotlight');
+  const tooltip = $('tour-tooltip');
+  const textEl = $('tour-text');
+
+  // Update text
+  textEl.innerHTML = step.text;
+
+  // Remove previous arrow class
+  tooltip.className = 'tour-tooltip arrow-' + (step.arrow || 'top');
+
+  if (targetEl) {
+    const rect = targetEl.getBoundingClientRect();
+    const padding = 8;
+
+    // Position spotlight
+    spotlight.style.top = (rect.top - padding) + 'px';
+    spotlight.style.left = (rect.left - padding) + 'px';
+    spotlight.style.width = (rect.width + padding * 2) + 'px';
+    spotlight.style.height = (rect.height + padding * 2) + 'px';
+
+    // Position tooltip near spotlight
+    const tooltipWidth = 360;
+    const tooltipHeight = 150; // estimate
+    const gap = 16;
+
+    let top, left, arrowDir;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Try to place below first
+    if (rect.bottom + gap + tooltipHeight < viewportHeight) {
+      top = rect.bottom + gap;
+      arrowDir = 'top';
+    } else if (rect.top - gap - tooltipHeight > 0) {
+      top = rect.top - gap - tooltipHeight;
+      arrowDir = 'bottom';
+    } else {
+      top = Math.max(16, Math.min(viewportHeight - tooltipHeight - 16, rect.top - tooltipHeight / 2));
+      arrowDir = rect.left > viewportWidth / 2 ? 'right' : 'left';
+    }
+
+    // Try to center horizontally
+    if (arrowDir === 'top' || arrowDir === 'bottom') {
+      left = Math.max(16, Math.min(viewportWidth - tooltipWidth - 16, rect.left + rect.width / 2 - tooltipWidth / 2));
+    } else {
+      // Side placement
+      if (rect.right + gap + tooltipWidth < viewportWidth) {
+        left = rect.right + gap;
+        arrowDir = 'left';
+      } else {
+        left = rect.left - gap - tooltipWidth;
+        arrowDir = 'right';
+      }
+    }
+
+    tooltip.className = 'tour-tooltip arrow-' + arrowDir;
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  } else {
+    // Center tooltip on screen
+    const tooltipWidth = 360;
+    tooltip.style.top = (window.innerHeight / 2 - 100) + 'px';
+    tooltip.style.left = (window.innerWidth / 2 - tooltipWidth / 2) + 'px';
+    tooltip.className = 'tour-tooltip arrow-bottom';
+    spotlight.style.width = '0';
+    spotlight.style.height = '0';
+  }
+}
+
+function nextTourStep() {
+  if (tourStep === tourSteps.length - 1) {
+    endTour();
+  } else {
+    showTourStep(tourStep + 1);
+  }
+}
+
+function endTour() {
+  hide('tour-overlay');
+  toast('Demo complete! Exit demo mode from settings anytime.');
 }
 
 // ===== INIT =====
@@ -1190,7 +1542,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('pin-input').addEventListener('keydown',e=>{if(e.key==='Enter')$('pin-submit-btn').click();});
 
   // Back
-  $('back-btn').addEventListener('click',()=>{currentRoomId=null;hide('room-view');hide('day-split-layout');showGrid();});
+  $('back-btn').addEventListener('click',()=>{
+    currentRoomId=null;hide('day-split-layout');
+    transitionViews('room-view','grid-view',()=>{renderFloorTabs();renderGrid();startNowTimer();startAutoSync();});
+  });
 
   // Nav arrows
   $('prev-btn').addEventListener('click',()=>{
@@ -1269,6 +1624,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('add-floor-btn').addEventListener('click',async()=>{const mx=Math.max(0,...data.floors.map(f=>f.order));data.floors.push({id:genId(),name:`Floor ${data.floors.length+1}`,order:mx+1});renderSettingsFloors();renderSettingsFloorPicker();renderFloorTabs();await store.save(data);});
   $('add-room-btn').addEventListener('click',async()=>{const fRooms=data.rooms.filter(r=>r.floorId===settingsFloorId);const mx=Math.max(0,...fRooms.map(r=>r.order));data.rooms.push({id:genId(),name:`Room ${fRooms.length+1}`,floorId:settingsFloorId,order:mx+1});renderSettingsRooms();renderGrid();await store.save(data);});
   $('reset-config-btn').addEventListener('click',()=>{if(!confirm('Clear GitHub token?'))return;localStorage.removeItem('gh_token');sessionStorage.removeItem('pin_ok');location.reload();});
+
+  // Demo walkthrough
+  $('demo-walkthrough-btn').addEventListener('click',startDemo);
+  $('exit-demo-btn').addEventListener('click',exitDemo);
+  $('tour-next-btn').addEventListener('click',nextTourStep);
 
   // Close modals on overlay
   document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)o.style.display='none';});});

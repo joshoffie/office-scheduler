@@ -318,6 +318,11 @@
             <div class="theme-picker" id="theme-picker"></div>
           </div>
           <div class="settings-section">
+            <h4>Demo</h4>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Try a guided walkthrough with sample data. Your real data won't be affected.</p>
+            <button class="btn btn-sm" id="demo-walkthrough-btn">Start Demo Walkthrough</button>
+          </div>
+          <div class="settings-section">
             <h4>Reset</h4>
             <button class="btn btn-sm btn-danger" id="reset-config-btn">Reconfigure GitHub Token</button>
           </div>
@@ -326,6 +331,19 @@
     </div>
 
   </div>
+
+  <!-- Tour overlay -->
+  <div id="tour-overlay" style="display:none;">
+    <div id="tour-spotlight"></div>
+    <div id="tour-tooltip">
+      <div id="tour-text"></div>
+      <div id="tour-footer">
+        <span id="tour-step-count"></span>
+        <button class="btn btn-primary btn-sm" id="tour-next-btn">Next</button>
+      </div>
+    </div>
+  </div>
+  <button id="exit-demo-btn" class="btn btn-danger btn-sm" style="display:none;position:fixed;bottom:20px;right:20px;z-index:3000;box-shadow:0 4px 12px rgba(0,0,0,0.3);">Exit Demo</button>
 
   <script src="js/app.js" type="module"></script>
 </body>
