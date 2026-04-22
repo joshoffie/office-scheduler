@@ -191,6 +191,12 @@
       "name": "Room 30",
       "floorId": "floor-1",
       "order": 29
+    },
+    {
+      "id": "id-moa6fwsx-4pr8xg",
+      "name": "Room 31",
+      "floorId": "floor-1",
+      "order": 30
     }
   ],
   "bookings": [
