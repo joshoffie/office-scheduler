@@ -131,6 +131,43 @@ function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return
 function sameDay(a,b) { return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
 function parseDateStr(s) { const p=s.split('-'); return new Date(p[0],p[1]-1,p[2]); }
 
+// ===== COLOR PALETTE =====
+const COLORS = [
+  '#3B82F6','#2563EB','#1D4ED8', // blues
+  '#06B6D4','#0891B2','#0E7490', // cyan
+  '#8B5CF6','#7C3AED','#6D28D9', // purple
+  '#EC4899','#DB2777','#BE185D', // pink
+  '#EF4444','#DC2626','#B91C1C', // red
+  '#F97316','#EA580C','#C2410C', // orange
+  '#F59E0B','#D97706','#B45309', // amber
+  '#22C55E','#16A34A','#15803D', // green
+  '#14B8A6','#0D9488','#0F766E', // teal
+  '#6366F1','#4F46E5','#4338CA', // indigo
+  '#A855F7','#9333EA','#7E22CE', // violet
+  '#64748B','#475569','#334155', // slate
+];
+
+function initColorPicker(containerId, hiddenId) {
+  const container = $(containerId), hidden = $(hiddenId);
+  container.innerHTML = COLORS.map(c =>
+    `<div class="color-swatch${c===hidden.value?' selected':''}" data-color="${c}" style="background:${c}"></div>`
+  ).join('');
+  container.querySelectorAll('.color-swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      container.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+      hidden.value = sw.dataset.color;
+    });
+  });
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // ===== DATA =====
 function getBookingsForRoomDate(roomId, date) {
   const ds = dateStr(date), dow = date.getDay(), results = [];
@@ -167,11 +204,9 @@ function renderGrid() {
     // Always render ALL blocks so nurse can see schedule at a glance
     for(const b of bks){const s=timeToMinutes(b.startTime),e=timeToMinutes(b.endTime),l=(s/1440)*100,w=((e-s)/1440)*100;
       const cur=s<=nm&&e>nm,fut=s>nm,past=e<=nm;
-      let cls='mini-block';
-      if(cur) cls+=' current';
-      else if(fut) cls+=' future';
-      // past blocks still render (default blue), just slightly faded
-      mini+=`<div class="${cls}" style="left:${l}%;width:${w}%${past?';opacity:0.4':''}"></div>`;}
+      const mc=b.color||(b.isRecurring?'#16a34a':'#3B82F6');
+      const opa=past?0.4:cur?1:0.85;
+      mini+=`<div class="mini-block" style="left:${l}%;width:${w}%;background:${mc};opacity:${opa}${cur?';box-shadow:0 0 0 1px '+mc:''}"></div>`;}
     // Add now-line to mini timeline
     mini += `<div class="mini-now-line" style="left:${nowPct}%"></div>`;
     return `<div class="room-card ${occ?'occupied':'available'}" data-room-id="${room.id}">
@@ -302,7 +337,9 @@ function renderDayView() {
   let evHTML='';
   for(const b of bookings){
     const sm=timeToMinutes(b.startTime),em=timeToMinutes(b.endTime),h=Math.max(em-sm,15);
-    evHTML+=`<div class="event-block${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'>
+    const color = b.color || (b.isRecurring ? '#16a34a' : '#3B82F6');
+    const colorStyle = b.isRecurring ? '' : `background:${hexToRgba(color,0.2)};border-left-color:${color};`;
+    evHTML+=`<div class="event-block${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px;${colorStyle}" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'>
       <div class="event-title">${b.title}</div>
       <div class="event-time">${formatTimeDisplay(b.startTime)} – ${formatTimeDisplay(b.endTime)}</div>
       ${b.details?`<div class="event-details">${b.isRecurring?'Recurring office':b.details}</div>`:''}
@@ -311,8 +348,11 @@ function renderDayView() {
 
   container.innerHTML=`<div class="day-view"><div class="time-column">${timeHTML}</div><div class="events-column" id="day-events-col">${hourLines}${nowLineHTML}${evHTML}</div></div>`;
 
-  // Scroll
-  if(sameDay(selectedDate,today)) container.scrollTop=Math.max(0,today.getHours()*60-60); else container.scrollTop=7*60;
+  // Scroll to center now-line on screen
+  if(sameDay(selectedDate,today)){
+    const nm=today.getHours()*60+today.getMinutes();
+    container.scrollTop=Math.max(0,nm-container.clientHeight/2);
+  } else container.scrollTop=7*60;
 
   // Click event blocks to delete (only if not dragged)
   container.querySelectorAll('.event-block').forEach(el=>{el.addEventListener('click',e=>{e.stopPropagation();showDeleteModal(JSON.parse(el.dataset.booking));});});
@@ -358,12 +398,13 @@ function renderWeekView() {
     // Now line in week
     let nl=''; if(sameDay(d,today)){const nm=today.getHours()*60+today.getMinutes(); nl=`<div class="now-line" style="top:${nm}px"></div>`;}
     let ev=''; for(const b of bks){const sm=timeToMinutes(b.startTime),em=timeToMinutes(b.endTime),h=Math.max(em-sm,15);
-      ev+=`<div class="week-event${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'><div class="week-event-title">${b.title}</div>${h>=30?`<div class="week-event-time">${formatTimeDisplay(b.startTime)}</div>`:''}</div>`;}
+      const wc=b.color||(b.isRecurring?'#16a34a':'#3B82F6');const wcs=b.isRecurring?'':`background:${hexToRgba(wc,0.2)};border-left-color:${wc};`;
+      ev+=`<div class="week-event${b.isRecurring?' recurring':''}" style="top:${sm}px;height:${h}px;${wcs}" data-booking='${JSON.stringify(b).replace(/'/g,"&#39;")}'><div class="week-event-title">${b.title}</div>${h>=30?`<div class="week-event-time">${formatTimeDisplay(b.startTime)}</div>`:''}</div>`;}
     cols+=`<div class="week-day-col" data-date="${ds}">${lines}${nl}${ev}</div>`;
   }
 
   container.innerHTML=`<div class="week-view"><div class="week-header">${hdr}</div><div class="week-body" id="week-body"><div class="week-time-col">${timeHTML}</div>${cols}</div></div>`;
-  const body=$('week-body'); if(body){if(sameDay(selectedDate,today))body.scrollTop=Math.max(0,today.getHours()*60-60);else body.scrollTop=7*60;}
+  const body=$('week-body'); if(body){if(sameDay(selectedDate,today)){const nm=today.getHours()*60+today.getMinutes();body.scrollTop=Math.max(0,nm-body.clientHeight/2);}else body.scrollTop=7*60;}
   container.querySelectorAll('.week-event').forEach(el=>{el.addEventListener('click',e=>{e.stopPropagation();showDeleteModal(JSON.parse(el.dataset.booking));});});
   container.querySelectorAll('.week-day-col').forEach(col=>{col.addEventListener('dblclick',e=>{if(e.target.closest('.week-event'))return;const y=e.clientY-col.getBoundingClientRect().top+col.parentElement.scrollTop;bookingDate=col.dataset.date;openBookingModal(Math.round(y/15)*15);});});
 
@@ -621,6 +662,9 @@ function resetInlinePanel() {
   $('inline-recurring-btn').classList.remove('active');
   hide('inline-recurring-options');
   $('inline-day-picker')?.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('selected'));
+  // Reset color to default blue
+  $('inline-booking-color').value='#3B82F6';
+  $('inline-color-picker')?.querySelectorAll('.color-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.color==='#3B82F6'));
 }
 
 async function saveInlineBooking() {
@@ -640,7 +684,8 @@ async function saveInlineBooking() {
     if(!data.knownNames.includes(doc)) data.knownNames.push(doc);
     data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
   } else {
-    data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,createdAt:new Date().toISOString()});
+    const color=$('inline-booking-color').value;
+    data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,color,createdAt:new Date().toISOString()});
   }
   resetInlinePanel(); renderRoom(); toast('Booking saved');
   try{await store.save(data);}catch(e){toast('Error saving');console.error(e);}
@@ -655,6 +700,9 @@ function openBookingModal(startMinutes) {
   $('recurring-doctor').value='';
   document.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('selected'));
   $('autocomplete-dropdown').style.display='none';
+  // Reset color to default blue
+  $('booking-color').value='#3B82F6';
+  $('modal-color-picker')?.querySelectorAll('.color-swatch').forEach(s=>s.classList.toggle('selected',s.dataset.color==='#3B82F6'));
   show('booking-modal'); $('booking-title').focus();
 }
 function closeBookingModal() { hide('booking-modal'); bookingDate=null; }
@@ -676,7 +724,8 @@ async function saveBooking() {
     if(!data.knownNames.includes(doc)) data.knownNames.push(doc);
     data.recurringRules.push({id:genId(),roomId:currentRoomId,doctorName:doc,daysOfWeek:days,startTime,endTime,exceptions:[],createdAt:new Date().toISOString()});
   } else {
-    data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,createdAt:new Date().toISOString()});
+    const color=$('booking-color').value;
+    data.bookings.push({id:genId(),roomId:currentRoomId,title,details,date:bookingDate||dateStr(selectedDate),startTime,endTime,color,createdAt:new Date().toISOString()});
   }
   closeBookingModal(); renderRoom(); toast('Booking saved');
   try{await store.save(data);}catch(e){toast('Error saving');console.error(e);}
@@ -771,6 +820,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Init inline time inputs (day split panel)
   inlineStartInput=initTimeInput('inline-start-time-input','inline-booking-start');
   inlineEndInput=initTimeInput('inline-end-time-input','inline-booking-end');
+  // Init color pickers
+  initColorPicker('modal-color-picker','booking-color');
+  initColorPicker('inline-color-picker','inline-booking-color');
   setupAutocomplete();
   setupInlineAutocomplete();
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Office Room Scheduler</title>
+  <title>Carla Scheduler</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@
             <circle cx="21" cy="29" r="1.5" fill="#2B7DC5"/><circle cx="27" cy="29" r="1.5" fill="#2B7DC5"/>
           </svg>
         </div>
-        <h1>Office Scheduler Setup</h1>
+        <h1>Carla Scheduler Setup</h1>
         <p class="setup-subtitle">First-time setup. Data is stored securely in your GitHub repository.</p>
 
         <div class="setup-step">
@@ -68,7 +68,7 @@
               <path d="M20 14v8M28 14v8" stroke="#2B7DC5" stroke-width="2" stroke-linecap="round"/>
               <path d="M14 24h20" stroke="#2B7DC5" stroke-width="2"/>
             </svg>
-            Room Scheduler
+            Carla Scheduler
           </h1>
         </div>
         <div class="top-bar-center">
@@ -154,6 +154,11 @@
               </div>
             </div>
           </div>
+          <div class="form-group">
+            <label>Color</label>
+            <div class="color-picker" id="inline-color-picker"></div>
+            <input type="hidden" id="inline-booking-color" value="#3B82F6">
+          </div>
           <button type="button" class="recurring-btn" id="inline-recurring-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
             Permanent / Recurring Office
@@ -222,6 +227,11 @@
                 <input type="hidden" id="booking-end" value="09:00">
               </div>
             </div>
+          </div>
+          <div class="form-group">
+            <label>Color</label>
+            <div class="color-picker" id="modal-color-picker"></div>
+            <input type="hidden" id="booking-color" value="#3B82F6">
           </div>
           <button type="button" class="recurring-btn" id="booking-recurring-btn">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
