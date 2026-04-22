@@ -127,10 +127,10 @@ function transitionViews(outId, inId, onMid) {
   setTimeout(() => {
     outEl.style.display = 'none';
     outEl.classList.remove('view-fade-out','view-container');
-    if (onMid) onMid();
     inEl.style.display = '';
     inEl.classList.add('view-container','view-fade-in');
     void inEl.offsetWidth;
+    if (onMid) onMid();
     inEl.classList.add('view-active');
     setTimeout(() => {
       inEl.classList.remove('view-container','view-fade-in','view-active');
