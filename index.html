@@ -7,10 +7,13 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div id="app">
-    <!-- Setup Wizard (GitHub token only — PIN is hardcoded) -->
+    <!-- Setup Wizard (Firebase — no token needed) -->
     <div id="setup-view" class="view" style="display:none;">
       <div class="setup-card">
         <div class="setup-logo">
@@ -23,18 +26,9 @@
           </svg>
         </div>
         <h1>Carla Scheduler Setup</h1>
-        <p class="setup-subtitle">First-time setup. Data is stored securely in your GitHub repository.</p>
+        <p class="setup-subtitle">Initializing database connection&hellip;</p>
 
-        <div class="setup-step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>GitHub Access Token</h3>
-            <p>Paste a GitHub Personal Access Token with <strong>repo</strong> scope. This stays in your browser only.</p>
-            <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-          </div>
-        </div>
-
-        <button id="setup-save-btn" class="btn btn-primary btn-lg">Complete Setup</button>
+        <button id="setup-save-btn" class="btn btn-primary btn-lg">Connect</button>
         <p id="setup-error" class="error-text"></p>
       </div>
     </div>
@@ -324,7 +318,7 @@
           </div>
           <div class="settings-section">
             <h4>Reset</h4>
-            <button class="btn btn-sm btn-danger" id="reset-config-btn">Reconfigure GitHub Token</button>
+            <button class="btn btn-sm btn-danger" id="reset-config-btn">Reset Session</button>
           </div>
         </div>
       </div>

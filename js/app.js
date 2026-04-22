@@ -1,39 +1,41 @@
 // ===== CONFIGURATION =====
-const REPO_OWNER = 'Joshoffie';
-const REPO_NAME = 'office-scheduler';
-const DATA_FILE = 'data.json';
-const BRANCH = 'main';
 const HARDCODED_PIN = '1999';
 const PRUNE_DAYS = 60; // default: auto-delete one-time bookings older than this
-const MAX_JSON_BYTES = 800000; // 800KB safety limit (GitHub API max is 1MB)
+const MAX_JSON_BYTES = 900000; // 900KB safety limit (Firestore doc max is 1MB)
 const PRUNE_TIERS = [60, 30, 14, 7, 3]; // progressively aggressive pruning thresholds
 
-// ===== GITHUB STORAGE LAYER =====
-class GitHubStore {
-  constructor(token) {
-    this.token = token;
-    this.baseUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${DATA_FILE}`;
-    this.sha = null;
+// ===== FIREBASE CONFIGURATION =====
+const firebaseConfig = {
+  apiKey: "AIzaSyC1rsplOb3nGfpeloY47JmA0QOof1a-aeU",
+  authDomain: "carla-scheduler.firebaseapp.com",
+  projectId: "carla-scheduler",
+  storageBucket: "carla-scheduler.firebasestorage.app",
+  messagingSenderId: "46794370611",
+  appId: "1:46794370611:web:3f8d51d9ae3fb4f0393d46"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ===== FIREBASE STORAGE LAYER =====
+class FirebaseStore {
+  constructor() {
     this.saving = false;
     this.pendingSave = null;
   }
-  headers() {
-    return { 'Authorization': `token ${this.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
-  }
   async load() {
-    const res = await fetch(this.baseUrl + `?ref=${BRANCH}&t=${Date.now()}`, { headers: this.headers() });
-    if (res.status === 404) { const d = this.defaultData(); await this.saveRaw(d); return d; }
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-    const json = await res.json();
-    this.sha = json.sha;
-    return JSON.parse(atob(json.content.replace(/\n/g, '')));
+    const doc = await db.collection('scheduler').doc('data').get();
+    if (!doc.exists) {
+      const d = this.defaultData();
+      await this.saveRaw(d);
+      return d;
+    }
+    return doc.data();
   }
   async save(data) {
     if (demoMode) return;
     if (this.saving) { this.pendingSave = data; return; }
     this.saving = true;
     try {
-      // Pre-save size guard: adaptive prune if approaching limit
       pruneOldData(data);
       await this.saveRaw(data);
     } finally {
@@ -42,13 +44,9 @@ class GitHubStore {
     }
   }
   async saveRaw(data) {
-    // Compact JSON (no pretty-print) to minimize file size
-    const body = { message: `Update ${new Date().toISOString()}`, content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))), branch: BRANCH };
-    if (this.sha) body.sha = this.sha;
-    const res = await fetch(this.baseUrl, { method: 'PUT', headers: this.headers(), body: JSON.stringify(body) });
-    if (res.status === 409) { await this.load(); return this.saveRaw(data); }
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(`Save: ${res.status} ${e.message||''}`); }
-    this.sha = (await res.json()).content.sha;
+    // Firestore doesn't allow undefined values, so sanitize
+    const clean = JSON.parse(JSON.stringify(data));
+    await db.collection('scheduler').doc('data').set(clean);
   }
   defaultData() {
     const floors = [{ id: 'floor-1', name: 'Floor 1', order: 0 }];
@@ -103,7 +101,7 @@ function pruneOldData(data) {
   }
 
   if (totalPruned > 0) console.log(`Pruned ${totalPruned} old bookings`);
-  if (size > MAX_JSON_BYTES) console.error(`WARNING: data.json is ${(size/1024).toFixed(0)}KB — approaching GitHub 1MB limit!`);
+  if (size > MAX_JSON_BYTES) console.error(`WARNING: data is ${(size/1024).toFixed(0)}KB — approaching Firestore 1MB doc limit!`);
   return totalPruned > 0;
 }
 
@@ -1490,10 +1488,8 @@ async function init() {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme && THEMES[savedTheme]) applyTheme(savedTheme);
 
-  const token=localStorage.getItem('gh_token');
-  if(!token){showSetup();return;}
-  store=new GitHubStore(token);
-  try{data=await store.load();}catch(e){console.error(e);toast('Failed to connect');showSetup();return;}
+  store = new FirebaseStore();
+  try{data=await store.load();}catch(e){console.error(e);toast('Failed to connect to database');showSetup();return;}
   // Auto-prune old bookings on startup
   if(pruneOldData(data)){try{await store.save(data);console.log('Pruned data saved');}catch(e){console.warn('Prune save failed:',e);}}
   const session=sessionStorage.getItem('pin_ok');
@@ -1527,14 +1523,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // Setup (token only, no PIN setup)
   $('setup-save-btn').addEventListener('click',async()=>{
-    const token=$('github-token-input').value.trim();
-    const existingToken=localStorage.getItem('gh_token')||token;
-    if(!existingToken){$('setup-error').textContent='Please enter a GitHub token.';return;}
     $('setup-error').textContent='';$('setup-save-btn').textContent='Connecting...';$('setup-save-btn').disabled=true;
-    try{localStorage.setItem('gh_token',existingToken);store=new GitHubStore(existingToken);data=await store.load();
-      sessionStorage.setItem('pin_ok','true');showGrid();toast('Setup complete!');}
-    catch(e){console.error(e);$('setup-error').textContent='Failed to connect.';localStorage.removeItem('gh_token');}
-    finally{$('setup-save-btn').textContent='Complete Setup';$('setup-save-btn').disabled=false;}
+    try{store=new FirebaseStore();data=await store.load();
+      sessionStorage.setItem('pin_ok','true');showGrid();toast('Connected!');}
+    catch(e){console.error(e);$('setup-error').textContent='Failed to connect to database.';}
+    finally{$('setup-save-btn').textContent='Connect';$('setup-save-btn').disabled=false;}
   });
 
   // PIN (hardcoded)
@@ -1623,7 +1616,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('settings-close-btn').addEventListener('click',()=>{closeSettings();renderGrid();});
   $('add-floor-btn').addEventListener('click',async()=>{const mx=Math.max(0,...data.floors.map(f=>f.order));data.floors.push({id:genId(),name:`Floor ${data.floors.length+1}`,order:mx+1});renderSettingsFloors();renderSettingsFloorPicker();renderFloorTabs();await store.save(data);});
   $('add-room-btn').addEventListener('click',async()=>{const fRooms=data.rooms.filter(r=>r.floorId===settingsFloorId);const mx=Math.max(0,...fRooms.map(r=>r.order));data.rooms.push({id:genId(),name:`Room ${fRooms.length+1}`,floorId:settingsFloorId,order:mx+1});renderSettingsRooms();renderGrid();await store.save(data);});
-  $('reset-config-btn').addEventListener('click',()=>{if(!confirm('Clear GitHub token?'))return;localStorage.removeItem('gh_token');sessionStorage.removeItem('pin_ok');location.reload();});
+  $('reset-config-btn').addEventListener('click',()=>{if(!confirm('Reset session and return to PIN entry?'))return;sessionStorage.removeItem('pin_ok');location.reload();});
 
   // Demo walkthrough
   $('demo-walkthrough-btn').addEventListener('click',startDemo);
