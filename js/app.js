@@ -308,10 +308,16 @@ function renderGrid() {
       mini+=`<div class="mini-block" style="left:${l}%;width:${w}%;background:${mc};opacity:${opa}${cur?';box-shadow:0 0 0 1px '+mc:''}"></div>`;}
     // Add now-line to mini timeline
     mini += `<div class="mini-now-line" style="left:${nowPct}%"></div>`;
-    return `<div class="room-card ${occ?'occupied':'available'}" data-room-id="${room.id}">
+    // Check if a booking starts within the next 15 minutes
+    const upcoming = !occ && bks.find(b => { const s=timeToMinutes(b.startTime); return s > nm && s <= nm+15; });
+    const cardClass = occ ? 'occupied' : upcoming ? 'upcoming' : 'available';
+    const statusClass = occ ? 'status-occupied' : upcoming ? 'status-upcoming' : 'status-available';
+    const statusText = occ ? 'IN USE' : upcoming ? 'SOON' : 'Open';
+    const occupantText = occ ? occ.title : upcoming ? upcoming.title : '';
+    return `<div class="room-card ${cardClass}" data-room-id="${room.id}">
       <div class="room-card-header"><span class="room-card-name">${room.name}</span>
-        <span class="room-card-status ${occ?'status-occupied':'status-available'}">${occ?'IN USE':'Open'}</span></div>
-      <div class="room-card-occupant">${occ?occ.title:''}</div>
+        <span class="room-card-status ${statusClass}">${statusText}</span></div>
+      <div class="room-card-occupant">${occupantText}</div>
       <div class="mini-timeline">${mini}</div></div>`;
   }).join('');
   grid.querySelectorAll('.room-card').forEach(c=>c.addEventListener('click',()=>openRoom(c.dataset.roomId)));

@@ -194,6 +194,8 @@ textarea { resize: vertical; }
 }
 .room-card.occupied { border-color: var(--red-500); background: var(--red-50); }
 .room-card.occupied:hover { border-color: var(--red-600); }
+.room-card.upcoming { border-color: var(--green-700); background: var(--green-100); }
+.room-card.upcoming:hover { border-color: #14532d; }
 .room-card.available { border-color: var(--green-500); background: var(--green-50); }
 .room-card.available:hover { border-color: var(--green-600); }
 
@@ -209,6 +211,7 @@ textarea { resize: vertical; }
   padding: 2px 8px; border-radius: 10px;
 }
 .status-occupied { background: var(--red-100); color: var(--red-700); }
+.status-upcoming { background: var(--green-700); color: white; }
 .status-available { background: var(--green-100); color: var(--green-600); }
 
 .room-card-occupant {
