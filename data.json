@@ -203,6 +203,16 @@
       "startTime": "17:00",
       "endTime": "19:00",
       "createdAt": "2026-04-22T14:56:24.835Z"
+    },
+    {
+      "id": "id-moa6ek5z-fis6gm",
+      "roomId": "room-16",
+      "title": "Josh",
+      "details": "",
+      "date": "2026-04-22",
+      "startTime": "10:00",
+      "endTime": "12:00",
+      "createdAt": "2026-04-22T14:56:44.951Z"
     }
   ],
   "recurringRules": [
