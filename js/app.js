@@ -1243,33 +1243,34 @@ function generateDemoData() {
   }
 
   // Guarantee at least 5 rooms have a booking happening RIGHT NOW (IN USE)
+  // Spread them out across the grid so it looks natural
   const nowMin = today.getHours() * 60 + today.getMinutes();
   const todayStr = dateStr(today);
   const allRooms = demoData.rooms;
-  // Force-create "in progress" bookings for rooms 1-5 (indices 0-4)
-  const inUseTarget = Math.min(5, allRooms.length);
-  for (let ri = 0; ri < inUseTarget; ri++) {
-    const room = allRooms[ri];
+  const inUseIndices = [0, 4, 9, 14, 21]; // Rooms 1, 5, 10, 15, 22 — spread across grid
+  const inUseTarget = Math.min(inUseIndices.length, allRooms.length);
+  for (let i = 0; i < inUseTarget; i++) {
+    const room = allRooms[inUseIndices[i]];
     // Create a booking: started 30 min ago, ends 30 min from now (60 min total)
     const bStart = Math.max(0, nowMin - 30);
     const bEnd = Math.min(1440, nowMin + 30);
     const finalEnd = Math.max(bEnd, bStart + 60); // ensure at least 60 min
 
     // Remove ALL conflicting bookings for this room on today
-    for (let i = bookings.length - 1; i >= 0; i--) {
-      if (bookings[i].roomId === room.id && bookings[i].date === todayStr &&
-          timeToMinutes(bookings[i].startTime) < finalEnd && timeToMinutes(bookings[i].endTime) > bStart) {
-        bookings.splice(i, 1);
+    for (let j = bookings.length - 1; j >= 0; j--) {
+      if (bookings[j].roomId === room.id && bookings[j].date === todayStr &&
+          timeToMinutes(bookings[j].startTime) < finalEnd && timeToMinutes(bookings[j].endTime) > bStart) {
+        bookings.splice(j, 1);
       }
     }
 
-    const doctor = DEMO_DOCTORS[ri % DEMO_DOCTORS.length];
-    const color = COLORS[ri % COLORS.length];
+    const doctor = DEMO_DOCTORS[i % DEMO_DOCTORS.length];
+    const color = COLORS[i % COLORS.length];
     bookings.push({
       id: genId(),
       roomId: room.id,
       title: doctor,
-      details: DEMO_DETAILS[ri % DEMO_DETAILS.length],
+      details: DEMO_DETAILS[i % DEMO_DETAILS.length],
       date: todayStr,
       startTime: minutesToTime(bStart),
       endTime: minutesToTime(finalEnd),
