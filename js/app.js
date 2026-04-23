@@ -1279,6 +1279,35 @@ function generateDemoData() {
     });
   }
 
+  // Add "SOON" bookings for rooms 11 and 20 (starting in ~5 min)
+  const soonIndices = [10, 19]; // Room 11 and Room 20
+  for (const si of soonIndices) {
+    const room = allRooms[si];
+    if (!room) continue;
+    const soonStart = nowMin + 5;
+    const soonEnd = soonStart + 60;
+    // Remove conflicting bookings
+    for (let j = bookings.length - 1; j >= 0; j--) {
+      if (bookings[j].roomId === room.id && bookings[j].date === todayStr &&
+          timeToMinutes(bookings[j].startTime) < soonEnd && timeToMinutes(bookings[j].endTime) > soonStart) {
+        bookings.splice(j, 1);
+      }
+    }
+    const doctor = DEMO_DOCTORS[Math.floor(Math.random() * DEMO_DOCTORS.length)];
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    bookings.push({
+      id: genId(),
+      roomId: room.id,
+      title: doctor,
+      details: DEMO_DETAILS[Math.floor(Math.random() * DEMO_DETAILS.length)],
+      date: todayStr,
+      startTime: minutesToTime(soonStart),
+      endTime: minutesToTime(soonEnd),
+      color: color,
+      createdAt: new Date().toISOString()
+    });
+  }
+
   demoData.bookings = bookings;
 
   // Create 3-5 recurring rules with different doctors on different days
