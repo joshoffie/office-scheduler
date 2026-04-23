@@ -1245,47 +1245,37 @@ function generateDemoData() {
   // Guarantee at least 5 rooms have a booking happening RIGHT NOW (IN USE)
   const nowMin = today.getHours() * 60 + today.getMinutes();
   const todayStr = dateStr(today);
-  const currentFloor = demoData.floors[0]?.id;
-  const floorRooms = demoData.rooms.filter(r => r.floorId === currentFloor);
-  const roomsWithCurrent = new Set(
-    bookings.filter(b => b.date === todayStr && timeToMinutes(b.startTime) <= nowMin && timeToMinutes(b.endTime) > nowMin)
-      .map(b => b.roomId)
-  );
-  // Pick rooms that don't already have a current booking
-  const needCurrent = floorRooms.filter(r => !roomsWithCurrent.has(r.id)).slice(0, Math.max(0, 5 - roomsWithCurrent.size));
-  for (const room of needCurrent) {
-    // Create a booking that started 30-60 min ago and ends 30-60 min from now
-    const startOffset = Math.floor(Math.random() * 30) + 30;
-    const endOffset = Math.floor(Math.random() * 30) + 30;
-    const bStart = nowMin - startOffset;
-    const bEnd = nowMin + endOffset;
-    // Ensure minimum 60 min duration
-    const finalEnd = Math.max(bEnd, bStart + 60);
-    if (bStart >= 0 && finalEnd <= 1440) {
-      // Remove any conflicting bookings for this room/date
-      const conflictIdx = [];
-      bookings.forEach((b, idx) => {
-        if (b.roomId === room.id && b.date === todayStr &&
-            timeToMinutes(b.startTime) < finalEnd && timeToMinutes(b.endTime) > bStart) {
-          conflictIdx.push(idx);
-        }
-      });
-      for (let i = conflictIdx.length - 1; i >= 0; i--) bookings.splice(conflictIdx[i], 1);
+  const allRooms = demoData.rooms;
+  // Force-create "in progress" bookings for rooms 1-5 (indices 0-4)
+  const inUseTarget = Math.min(5, allRooms.length);
+  for (let ri = 0; ri < inUseTarget; ri++) {
+    const room = allRooms[ri];
+    // Create a booking: started 30 min ago, ends 30 min from now (60 min total)
+    const bStart = Math.max(0, nowMin - 30);
+    const bEnd = Math.min(1440, nowMin + 30);
+    const finalEnd = Math.max(bEnd, bStart + 60); // ensure at least 60 min
 
-      const doctor = DEMO_DOCTORS[Math.floor(Math.random() * DEMO_DOCTORS.length)];
-      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-      bookings.push({
-        id: genId(),
-        roomId: room.id,
-        title: doctor,
-        details: DEMO_DETAILS[Math.floor(Math.random() * DEMO_DETAILS.length)],
-        date: todayStr,
-        startTime: minutesToTime(bStart),
-        endTime: minutesToTime(finalEnd),
-        color: color,
-        createdAt: new Date().toISOString()
-      });
+    // Remove ALL conflicting bookings for this room on today
+    for (let i = bookings.length - 1; i >= 0; i--) {
+      if (bookings[i].roomId === room.id && bookings[i].date === todayStr &&
+          timeToMinutes(bookings[i].startTime) < finalEnd && timeToMinutes(bookings[i].endTime) > bStart) {
+        bookings.splice(i, 1);
+      }
     }
+
+    const doctor = DEMO_DOCTORS[ri % DEMO_DOCTORS.length];
+    const color = COLORS[ri % COLORS.length];
+    bookings.push({
+      id: genId(),
+      roomId: room.id,
+      title: doctor,
+      details: DEMO_DETAILS[ri % DEMO_DETAILS.length],
+      date: todayStr,
+      startTime: minutesToTime(bStart),
+      endTime: minutesToTime(finalEnd),
+      color: color,
+      createdAt: new Date().toISOString()
+    });
   }
 
   demoData.bookings = bookings;
